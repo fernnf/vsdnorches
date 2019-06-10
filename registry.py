@@ -17,9 +17,6 @@ class NodeRegistry(ApplicationSession):
 
     def TransportSwitch(self, prefix,switch):
 
-
-
-
     def onJoin(self, details):
         self.node_registred = {}
 
