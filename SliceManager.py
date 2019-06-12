@@ -22,7 +22,7 @@ class NetworkSlice(object):
 
     @classmethod
     def from_dict(cls, d):
-        obj = cls(tenant=d["tenant"], controller=d["controller"])
+        obj = cls(tenant = d["tenant"], controller = d["controller"])
         obj.id = d["id"]
         for vswitch in d["vswitches"]:
             obj.add_vswitch(vswitch)
@@ -44,13 +44,13 @@ class NetworkSlice(object):
     def rem_vswitch(self, vswitch_id):
         self.__vswitch.remove(vswitch_id)
 
-    def add_vlink(self, vlink):
-        pass
+    def add_vlink(self, vlink_id):
+        self.__vlink.append(vlink_id)
 
     def rem_vlink(self, vlink_id):
-        pass
+        self.__vlink.remove(vlink_id)
 
-    def get_vswitchs(self):
+    def get_vswitches(self):
         return self.__vswitch.copy()
 
     def get_links(self):
@@ -60,8 +60,8 @@ class NetworkSlice(object):
         netslice = dict()
         netslice["id"] = self.id
         netslice["tenant"] = self.tenant
-        netslice["vswitch"] = self.__vswitch.copy()
-        netslice["vlink"] = self.__vlink.copy()
+        netslice["vswitches"] = self.__vswitch.copy()
+        netslice["vlinks"] = self.__vlink.copy()
         return netslice.copy()
 
 
@@ -79,13 +79,24 @@ class VirtualSwitch(object):
 
     """
 
-    def __init__(self, tenant, name, tswitch, dpid=None, protocols=None):
+    def __init__(self, tenant, name, tswitch, dpid = None, protocols = None):
         self.id = str(rnd_id())
         self.tenant = tenant
         self.name = name
         self.tswitch = tswitch
         self.dpid = dpid
         self.protocols = protocols
+        self.vport = {}
+
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls(tenant = d["tenant"], name = d["name"], tswitch = d["tswitch"], dpid = d["dpid"],
+                  protocols = d["protocols"])
+
+        obj.vport = d["vport"]
+        obj.id = d["id"]
+
+        return obj
 
     def __dict__(self):
         vswitch = dict()
@@ -95,6 +106,8 @@ class VirtualSwitch(object):
         vswitch["tswitch"] = self.tswitch
         vswitch["dpid"] = self.dpid
         vswitch["protocols"] = self.protocols
+        vswitch["vport"] = self.vport
+
         return vswitch.copy()
 
 
@@ -113,7 +126,8 @@ class VirtualPort(object):
 
     """
 
-    def __init__(self, port_num, real_port_num, vswitch, reserved=False, bandwidth=None, type="vlan", encap="eth"):
+    def __init__(self, port_num, real_port_num, vswitch, reserved = False, bandwidth = None, type = "vlan",
+                 encap = "eth"):
         self.id = str(rnd_id())
         self.port_num = port_num
         self.real_port_num = real_port_num
@@ -122,6 +136,8 @@ class VirtualPort(object):
         self.bandwidth = bandwidth
         self.type = type
         self.encap = encap
+
+
 
     def __dict__(self):
         vport = dict()
@@ -156,8 +172,13 @@ class VirtualLink(object):
         self.encap = encap
         self.__statis = {}
 
+
+
     def set_statistics(self, st):
         self.__statis.update({str(datetime.now()): st})
+
+    def get_statis(self, data):
+
 
     def __dict__(self):
         vlink = dict()
@@ -179,7 +200,7 @@ class TransportSwitch(object):
         }
     """
 
-    def __init__(self, dpid, prefix=None):
+    def __init__(self, dpid, prefix = None):
         self.dpid = dpid
         self.prefix = prefix
         self.links = (prefix if prefix is not None else dict().copy())
@@ -243,40 +264,41 @@ class SliceManager(ApplicationSession):
         self.__virtualport = {}
         self.__vrituallink = {}
         self.__transport_switch = {}
+
     @inlineCallbacks
     def onJoin(self, details):
         resp = yield self.call("wamp.session.list")
         print(resp)
 
-    @wamp.register(uri="{p}.create_slice".format(p=PREFIX))
+    @wamp.register(uri = "{p}.create_slice".format(p = PREFIX))
     def create_slice(self, tenant, controller):
         slice = NetworkSlice(tenant, controller)
         self.__networkslices.update({tenant: slice})
 
-    @wamp.register(uri="{p}.delete_slice".format(p=PREFIX))
+    @wamp.register(uri = "{p}.delete_slice".format(p = PREFIX))
     def delete_slice(self):
         pass
 
-    @wamp.register(uri="{p}.add_vswitch".format(p=PREFIX))
+    @wamp.register(uri = "{p}.add_vswitch".format(p = PREFIX))
     def add_vswitch(self):
         pass
 
-    @wamp.register(uri="{p}.rem_vswitch".format(p=PREFIX))
+    @wamp.register(uri = "{p}.rem_vswitch".format(p = PREFIX))
     def rem_vswitch(self):
         pass
 
-    @wamp.register(uri="{p}.add_vport".format(p=PREFIX))
+    @wamp.register(uri = "{p}.add_vport".format(p = PREFIX))
     def add_vport(self):
         pass
 
-    @wamp.register(uri="{p}.rem_vport".format(p=PREFIX))
+    @wamp.register(uri = "{p}.rem_vport".format(p = PREFIX))
     def rem_vport(self):
         pass
 
-    @wamp.register(uri="{p}.start_slice".format(p=PREFIX))
+    @wamp.register(uri = "{p}.start_slice".format(p = PREFIX))
     def start_slice(self):
         pass
 
-    @wamp.register(uri="{p}.stop_slice".format(p=PREFIX))
+    @wamp.register(uri = "{p}.stop_slice".format(p = PREFIX))
     def stop_slice(self):
         pass
