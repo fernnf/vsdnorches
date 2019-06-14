@@ -40,9 +40,8 @@ class NetworkSlice(object):
         4: "STOP"
     }
 
-
     @classmethod
-    def from_dict(cls, d:dict):
+    def parser(cls, d: dict):
         obj = cls(tenant=d["tenant"], controller=d["controller"])
         obj.id = d["id"]
 
@@ -50,13 +49,13 @@ class NetworkSlice(object):
 
             vswitches = d["vswitches"]
             for vswitch in vswitches:
-                o = VirtualSwitch.from_dict(vswitch)
+                o = VirtualSwitch.parser(vswitch)
                 obj.add_vswitch(vswitch=o)
 
         if len(d["vlinks"]) > 0:
             vlinks = d["vlinks"]
             for vlink in vlinks:
-                o = VirtualLink.from_dict(vlink)
+                o = VirtualLink.parser(vlink)
                 obj.add_vlink(vlink=o)
 
         return cls
@@ -90,7 +89,10 @@ class NetworkSlice(object):
             raise ValueError("the virtual link was not found")
 
     def get_vswitches(self):
-        return self.__vswitches.copy()
+        return self.__vswitches.keys()
+
+    def get_vswitch(self, dpid):
+        return self.__vswitches.get(dpid)
 
     def get_links(self):
         return self.__vlinks.copy()
@@ -111,7 +113,7 @@ class NetworkSlice(object):
     def serialize(self):
         netslice = dict()
         netslice["id"] = self.id
-        netslice["status"] =  self.status
+        netslice["status"] = self.status
         netslice["tenant"] = self.tenant
         netslice["vswitches"] = serial_dict(self.__vswitches)
         netslice["vlinks"] = serial_list(self.__vlinks)
@@ -159,6 +161,13 @@ class VirtualSwitch(object):
         pn = vport["port_num"]
         self.__vports.update({pn: vport})
 
+    def del_vport(self, vport_id):
+        ret = self.exist_vport(vport_id)
+        if ret is not None:
+            del (self.__vports[vport_id])
+        else:
+            raise ValueError("the virtual port was not found")
+
     def get_vport(self, vport_id):
         ret = self.exist_vport(vport_id)
         if ret is not None:
@@ -180,7 +189,7 @@ class VirtualSwitch(object):
         return super().__hash__()
 
     @classmethod
-    def from_dict(cls, d):
+    def parser(cls, d):
         obj = cls(tenant=d["tenant"], name=d["name"], tswitch=d["tswitch"], dpid=d["dpid"],
                   protocols=d["protocols"])
 
@@ -189,7 +198,7 @@ class VirtualSwitch(object):
         if len(d["vports"]) > 0:
             vports = d["vport"]
             for vport in vports:
-                o = VirtualPort.from_dict(vport)
+                o = VirtualPort.parser(vport)
                 obj.set_vport(vport=o)
 
         return obj
@@ -231,7 +240,7 @@ class VirtualPort(object):
         self.encap = encap
 
     @classmethod
-    def from_dict(cls, d):
+    def parser(cls, d):
         obj = cls(d["vport_num"], d["tport_num"], d["reserved"], d["bandwidth"], d["type"], d["encap"])
         obj.id = d["id"]
 
@@ -269,7 +278,7 @@ class VirtualLink(object):
         self.key = key
 
     @classmethod
-    def from_dict(cls, d):
+    def parser(cls, d):
         obj = cls(d["ingress_port"], d["egress_port"], d["key"])
         obj.id = d["id"]
 
@@ -302,14 +311,14 @@ class TransportSwitch(object):
         self.tports = dict()
 
     @classmethod
-    def from_dict(cls, d):
+    def parser(cls, d):
         obj = cls(d["dpid"], d["prefix"])
         obj.id = d["id"]
 
         tports = d["tports"]
         if len(tports) > 0:
             for tport in tports:
-                o = TransportLinks.from_dict(tport)
+                o = TransportLinks.parser(tport)
                 obj.set_tport(tport=o)
 
         return obj
@@ -363,7 +372,7 @@ class TransportPort(object):
         self.encap = encap
 
     @classmethod
-    def from_dict(cls, d):
+    def parser(cls, d):
         obj = cls(d["port_num"], d["encap"])
         obj.id = d["id"]
 
@@ -389,7 +398,7 @@ class TransportLinks(object):
     """
 
     @classmethod
-    def from_dict(cls, d):
+    def parser(cls, d):
         obj = cls(d["ingress_port"], d["egress_port"], d["ingress_id"], d["egress_id"])
         obj.id = d["id"]
         return obj
@@ -413,73 +422,144 @@ class TransportLinks(object):
 
 class SliceManager(ApplicationSession):
 
-
-
     def __init__(self, *args, **kwargs):
         super(SliceManager, self).__init__(*args, **kwargs)
         self.__networkslices = {}
+        self.log.info("Starting Slice Manager...")
 
     @inlineCallbacks
-    def _check_slice_info(self, slice_id):
-        pass
+    def _rem_slice_deployed(self, slice_id):
+        mod_rem = "vsdnorches.slicebuilder.remove"
+        error, ret = yield self.call(mod_rem, slice_id)
+        if error:
+            raise ValueError(ret)
+        del (self.__networkslices[slice_id])
+
+    def _rem_slice_created(self, slice_id):
+        del (self.__networkslices[slice_id])
+
+    @inlineCallbacks
+    def get_slice_status(self, slice_id):
+        module_status = "vsdnorches.slicebuilder.get_status"
+        error, ret = yield self.call(module_status, slice_id)
+        if error:
+            self.log.error(ret)
+            return None
+        return ret
 
     @inlineCallbacks
     def onJoin(self, details):
         resp = yield self.call("wamp.session.list")
         print(resp)
 
-    @wamp.register(uri="{p}.create_slice".format(p=PREFIX))
-    def create_slice(self, slice):
-        s = NetworkSlice.from_dict(slice)
-        self.__networkslices.update({s.id: slice})
-        return s.id
+    @wamp.register(uri="{p}.create".format(p=PREFIX))
+    def create(self, slice):
+        s = NetworkSlice.parser(slice)
 
-    @wamp.register(uri="{p}.delete_slice".format(p=PREFIX))
-    def delete_slice(self, slice_id):
+        ret = self.get_slice_status(s.id)
+        if ret is None:
+            self.__networkslices.update({s.id: slice})
+            return s.id
+        else:
+            self.log.info("the slice has been deployed")
 
-        def del_slice():
-            del(self.__networkslices[slice_id])
-            return True
+    @wamp.register(uri="{p}.delete".format(p=PREFIX))
+    def delete(self, slice_id):
+        try:
+            ret = self.get_slice_status(slice_id)
+            if ret is None:
+                self._rem_slice_created(slice_id)
+                self.log.info("the slice {id} was deleted".format(id=slice_id))
+                return False, None
+            elif ret.__eq__("STOPPED"):
+                self._rem_slice_deployed(slice_id)
+                self.log.info("the slice {id} was deleted and undeployed".format(id=slice_id))
+                return False, None
+            elif ret.__eq__("DEPLOYING"):
+                msg = "Cannot delete slice in deploying"
+                self.log.error(msg)
+                return True, msg
+            elif ret.__eq__("RUNNING"):
+                msg = "Cannot delete slice in running"
+                self.log.error(msg)
+                return True, msg
+            elif ret.__eq__("ERROR"):
+                self._rem_slice_created(slice_id)
+                return False, None
+            else:
+                msg = "cannot delete slice"
+                self.log.info(msg)
+                return True, msg
 
-        def default_action(msg):
-            raise ValueError(msg)
-
-        value = self.__networkslices.get(slice_id, None)
-        if value is None:
-            return False, "The slice was not found"
-
-        return {
-            "ERROR": del_slice(),
-            "STOPED": del_slice(),
-            "RUNNING": default_action(" you cannot delete a slice that is running"),
-            "DEPLOYING": default_action(" you cannot delete a slice that is deploying")
-        }.get(self.status, "Value not found")
-
-
-
-
-
-
-
-
-
-
+        except Exception as ex:
+            return True, str(ex)
 
     @wamp.register(uri="{p}.add_vswitch".format(p=PREFIX))
-    def add_vswitch(self,  ):
-        pass
+    def add_vswitch(self, slice_id, vswitch):
+        vsw = VirtualSwitch.parser(vswitch)
+        slice = self.__networkslices.get(slice_id)
+
+        ret = self.get_slice_status(slice_id)
+        if ret is None:
+            slice.add_vswitch(vsw)
+            self.__networkslices.update({slice_id: slice})
+            self.log.info()
+            return False, None
+        else:
+            msg = "Cannot add a virtual switch in slice already has deployed"
+            self.log.error(msg)
+            return True, msg
 
     @wamp.register(uri="{p}.rem_vswitch".format(p=PREFIX))
-    def rem_vswitch(self):
-        pass
+    def rem_vswitch(self, slice_id, vswitch_id):
+        slice = self.__networkslices.get(slice_id)
+        vsw = slice.get_vswitch(vswitch_id)
+
+        ret = self.get_slice_status(slice_id)
+        if ret is None:
+            slice.rem_vswitch(vsw.dpid)
+            self.__networkslices.update({slice_id: slice})
+            self.log.info()
+            return False, None
+        else:
+            msg = "Cannot remove a virtual switch in slice already has deployed"
+            self.log.error(msg)
+            return True, msg
 
     @wamp.register(uri="{p}.add_vport".format(p=PREFIX))
-    def add_vport(self):
-        pass
+    def add_vport(self, slice_id, vswitch_id, vport):
+        slice = self.__networkslices.get(slice_id)
+        vsw = slice.get_vswitch(vswitch_id)
+        vp = VirtualPort.parser(vport)
+
+        ret = self.get_slice_status(slice_id)
+
+        if ret is None:
+            vsw.set_vport(vp)
+            slice.add_vswitch(vsw)
+            self.__networkslices.update({slice_id: slice})
+            self.log.info()
+            return False, None
+        else:
+            msg = "Cannot add a virtual port in slice already has deployed"
+            self.log.error(msg)
+            return True, msg
 
     @wamp.register(uri="{p}.rem_vport".format(p=PREFIX))
-    def rem_vport(self):
-        pass
+    def rem_vport(self, slice_id, vswitch_id, vport_id):
+        slice = self.__networkslices.get(slice_id)
+        vsw = slice.get_vswitch(vswitch_id)
+
+        ret = self.get_slice_status(slice_id)
+        if ret is None:
+            vsw.del_vport(vport_id)
+            slice.add_vswitch(vsw)
+            self.__networkslices.update({slice_id: slice})
+
+        else:
+            msg = "Cannot remove a virtual port in slice already has deployed"
+            self.log.error(msg)
+            return True, msg
 
     @wamp.register(uri="{p}.start_slice".format(p=PREFIX))
     def start_slice(self):
@@ -488,10 +568,3 @@ class SliceManager(ApplicationSession):
     @wamp.register(uri="{p}.stop_slice".format(p=PREFIX))
     def stop_slice(self):
         pass
-
-
-    def _dispatch_action(self, action, slice_id):
-        return {
-            "CREATED" : lambda sid : del(),
-
-        }
