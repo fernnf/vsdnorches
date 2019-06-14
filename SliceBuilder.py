@@ -88,6 +88,7 @@ class SliceBuilder(ApplicationSession):
         pass
 
 
+
     @wamp.register(uri="{p}.get_status".format(p=PREFIX))
     def get_status(self, slice_id):
         ret = self.__slices.get(slice_id, None)
