@@ -24,12 +24,22 @@ class NetworkSlice(object):
     """
         netslice = {
             id: string,
+            status: String
             tenant: int
             controller: string
             vswitches: list[string]
             vlinks: list[string]
         }
     """
+
+    status_slice = {
+        0: "CREATED",
+        1: "DEPLOYED",
+        2: "RUNNING",
+        3: "ERROR",
+        4: "STOP"
+    }
+
 
     @classmethod
     def from_dict(cls, d:dict):
@@ -53,6 +63,7 @@ class NetworkSlice(object):
 
     def __init__(self, tenant, controller):
         self.id = str(rnd_id())
+        self.status = self.status_slice.get(0)
         self.tenant = tenant
         self.controller = controller
         self.__vswitches = {}
@@ -100,11 +111,22 @@ class NetworkSlice(object):
     def serialize(self):
         netslice = dict()
         netslice["id"] = self.id
+        netslice["status"] =  self.status
         netslice["tenant"] = self.tenant
         netslice["vswitches"] = serial_dict(self.__vswitches)
         netslice["vlinks"] = serial_list(self.__vlinks)
 
         return netslice.copy()
+
+    def set_status(self, status):
+        s = self.status_slice.get(status, None)
+        if s is None:
+            raise ValueError("The status value is not valid")
+
+        self.status = s
+
+    def get_status(self):
+        return self.status
 
     def __hash__(self) -> int:
         return super().__hash__()
@@ -391,20 +413,15 @@ class TransportLinks(object):
 
 class SliceManager(ApplicationSession):
 
-    slice_status = {
-        0: "CREATED",
-        1: "DEPLOYED",
-        2: "RUNNING",
-        3: "ERROR",
-        4: "STOP"
-    }
+
 
     def __init__(self, *args, **kwargs):
         super(SliceManager, self).__init__(*args, **kwargs)
         self.__networkslices = {}
 
-    def __get_status(self, k):
-        return self.slice_status.get(k[1])
+    @inlineCallbacks
+    def _check_slice_info(self, slice_id):
+        pass
 
     @inlineCallbacks
     def onJoin(self, details):
@@ -414,14 +431,39 @@ class SliceManager(ApplicationSession):
     @wamp.register(uri="{p}.create_slice".format(p=PREFIX))
     def create_slice(self, slice):
         s = NetworkSlice.from_dict(slice)
-        self.__networkslices.update({(s.id, 0): slice})
+        self.__networkslices.update({s.id: slice})
         return s.id
 
     @wamp.register(uri="{p}.delete_slice".format(p=PREFIX))
     def delete_slice(self, slice_id):
 
+        def del_slice():
+            del(self.__networkslices[slice_id])
+            return True
 
-        pass
+        def default_action(msg):
+            raise ValueError(msg)
+
+        value = self.__networkslices.get(slice_id, None)
+        if value is None:
+            return False, "The slice was not found"
+
+        return {
+            "ERROR": del_slice(),
+            "STOPED": del_slice(),
+            "RUNNING": default_action(" you cannot delete a slice that is running"),
+            "DEPLOYING": default_action(" you cannot delete a slice that is deploying")
+        }.get(self.status, "Value not found")
+
+
+
+
+
+
+
+
+
+
 
     @wamp.register(uri="{p}.add_vswitch".format(p=PREFIX))
     def add_vswitch(self,  ):
@@ -446,3 +488,10 @@ class SliceManager(ApplicationSession):
     @wamp.register(uri="{p}.stop_slice".format(p=PREFIX))
     def stop_slice(self):
         pass
+
+
+    def _dispatch_action(self, action, slice_id):
+        return {
+            "CREATED" : lambda sid : del(),
+
+        }
