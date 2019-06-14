@@ -81,10 +81,12 @@ class SliceBuilder(ApplicationSession):
     def __init__(self, *args, **kwargs):
         super(SliceBuilder, self).__init__(*args, **kwargs)
         self.__slices = {}
+        self.log.info("Starting Slice Builer...")
 
-    @inlineCallbacks
+
     def onJoin(self, details):
         pass
+
 
     @wamp.register(uri="{p}.get_status".format(p=PREFIX))
     def get_status(self, slice_id):
