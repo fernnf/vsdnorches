@@ -1,8 +1,8 @@
 from autobahn.twisted.wamp import ApplicationSession
 from autobahn import wamp
-from SliceManager import NetworkSlice
+from SliceManager import NetworkSlice, VirtualLink, VirtualSwitch
 
-import time
+from SliceModels import SliceInfo
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -20,60 +20,8 @@ slice_status = {
 """
 
 
-def _get_deploy_time():
-    return time.asctime(time.localtime(time.time()))
 
 
-class SliceInfo(object):
-    def __init__(self, slice):
-        self.status = 0
-        self.date = _get_deploy_time()
-        self.slice = slice
-
-    @property
-    def status(self):
-        return self.__status
-
-    @status.setter
-    def status(self, value):
-        self.__status = {
-            0: "DEPLOYING",
-            1: "RUNNING",
-            2: "STOPPED",
-            3: "ERROR"
-        }.get(value, None)
-
-    @property
-    def deploy_time(self):
-        return self.__date
-
-    @deploy_time.setter
-    def deploy_time(self, value):
-        self.__date = value
-
-    @property
-    def slice(self):
-        return self.__slice
-
-    @slice.setter
-    def slice(self, value):
-        self.__slice = value
-
-    @property
-    def slice_id(self):
-        return self.slice.id
-
-    @slice_id.setter
-    def slice_id(self, value):
-        pass
-
-    def serialize(self):
-        info = dict()
-        info["status"] = self.status
-        info["deploy_time"] = self.deploy_time
-        info["slice"] = self.slice.serialized()
-
-        return info.copy()
 
 
 class SliceBuilder(ApplicationSession):
@@ -83,9 +31,10 @@ class SliceBuilder(ApplicationSession):
         self.__slices = {}
         self.log.info("Starting Slice Builer...")
 
-
     def onJoin(self, details):
         pass
+
+    def register_vswitch(self, vswitches):
 
 
 
@@ -100,13 +49,19 @@ class SliceBuilder(ApplicationSession):
     @wamp.register(uri="{p}.deploy".format(p=PREFIX))
     def deploy(self, slice):
 
-        s = NetworkSlice.parser(slice)
+        ns = NetworkSlice.parser(slice)
+        si = SliceInfo(ns)
 
         def register():
-            sid = s.id
-            info = SliceInfo(s)
-            self.__slices.update({sid: info})
-            self.log.info("new slice registed to deploy")
+            id = si.slice_id
+            self.__slices.update({id: si})
+            self.log.info("new slice registered to deploy")
+
+        def deploy_vswitches():
+            pass
+
+        def deploy_links():
+            pass
 
         def send_notification():
             pass
