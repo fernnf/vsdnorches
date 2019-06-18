@@ -31,7 +31,7 @@ class VirtualPort(object):
     """
         vport = {
             id: string,
-            vswitch: string,
+            vswitch: string (vswitch_id),
             vport_num: int,
             tport_num: int,
             bandwidth: long,
@@ -193,6 +193,7 @@ class VirtualSwitch(object):
         self.__proto = value
 
     def set_vports(self, vport):
+        vport.vswitch = self.id
         port_num = vport.vport_num
         self.__vports.update({port_num: vport})
 
@@ -240,18 +241,22 @@ class VirtualLink(object):
     """
         vlink = {
             id: string
-            ingress: [(port_num, vswitch_id)]
-            egress: [(port_num, vswitch_id)]
+            start_node: string (vswitch id)
+            stop_node: string (vswitch id)
+            ingress_port: int (port_num)
+            egress_port: int (port_num)
             type: string (vlan, vxlan)
             key: string (vlan id, vxlan_id)
         }
 
     """
 
-    def __init__(self, ingress, egress, type, key):
+    def __init__(self, start_node, stop_node, ingress_port, egress_port, type, key):
         self.__id = get_id()
-        self.ingress = ingress
-        self.egress = egress
+        self.start_node = start_node
+        self.stop_node = stop_node
+        self.ingress_port = ingress_port
+        self.egress_port = egress_port
         self.type = type
         self.key = key
 
@@ -264,19 +269,35 @@ class VirtualLink(object):
         pass
 
     @property
-    def ingress(self):
+    def start_node(self):
+        return self.__sn
+
+    @start_node.setter
+    def start_node(self, value):
+        self.__sn = value
+
+    @property
+    def stop_node(self):
+        return self.__stn
+
+    @stop_node.setter
+    def stop_node(self, value):
+        self.__stn = value
+
+    @property
+    def ingress_port(self):
         return self.__ip
 
-    @ingress.setter
-    def ingress(self, value):
+    @ingress_port.setter
+    def ingress_port(self, value):
         self.__ip = value
 
     @property
-    def egress(self):
+    def egress_port(self):
         return self.__ep
 
-    @egress.setter
-    def egress(self, value):
+    @egress_port.setter
+    def egress_port(self, value):
         self.__ep = value
 
     @property
@@ -297,8 +318,10 @@ class VirtualLink(object):
 
     @classmethod
     def parser(cls, d):
-        obj = cls(ingress=d["ingress"],
-                  egress=d["egress"],
+        obj = cls(start_node = d["start_node"],
+                  stop_node = d["stop_node"],
+                  ingress_port=d["ingress_port"],
+                  egress_port=d["egress_port"],
                   type=d["type"],
                   key=d["key"])
         obj.__id = d["id"]
@@ -308,8 +331,10 @@ class VirtualLink(object):
     def serialize(self):
         vlink = dict()
         vlink["id"] = self.id
-        vlink["ingress_port"] = self.ingress
-        vlink["egress_port"] = self.egress
+        vlink["start_node"] = self.start_node
+        vlink["stop_node"] = self.stop_node
+        vlink["ingress_port"] = self.ingress_port
+        vlink["egress_port"] = self.egress_port
         vlink["type"] = self.type
         vlink["key"] = self.key
 
@@ -327,66 +352,89 @@ class TransportSwitch(object):
     """
 
     def __init__(self, dpid, prefix):
-        self.id = str(rnd_id())
+        self.__id = get_id(dpid = dpid)
         self.dpid = dpid
         self.prefix = prefix
-        self.tports = dict()
+        self.__tports = {}
+
+    @property
+    def id(self):
+        return self.__id
+
+    @id.setter
+    def id(self, value):
+        pass
+
+    @property
+    def dpid(self):
+        return self.__dpid
+
+    @dpid.setter
+    def dpid(self, value):
+        if value is None:
+            self.__dpid = self.id[:16]
+        else:
+            assert len(value) == 16, "dpid must have 16 digits hex decimal"
+            self.__dpid = value
+
+    @property
+    def prefix_node(self):
+        return self.__pn
+
+    @prefix_node.setter
+    def prefix_node(self, value):
+        self.__pn = value
 
     @classmethod
     def parser(cls, d):
-        obj = cls(d["dpid"], d["prefix"])
-        obj.id = d["id"]
+        obj = cls(d["dpid"],
+                  d["prefix"])
 
-        tports = d["tports"]
+        obj.__id = d["id"]
+
+        tports = dict(d["tports"])
         if len(tports) > 0:
-            for tport in tports:
-                o = TransportLinks.parser(tport)
-                obj.set_tport(tport=o)
+            obj.__tports = tports
 
         return obj
+
+    def set_tports(self, tport):
+        tport.tswitch = self.id
+        port_num =  tport.port_num
+        self.__tports.update({port_num: tport})
+
+    def get_vport(self, port_num):
+        return self.__tports.get(port_num, None)
+
+    def get_vports(self):
+        return self.__tports.values()
+
+    def del_vport(self, port_num):
+        vport = self.get_vport(port_num)
+        if vport is None:
+            raise ValueError("virtual port not found")
+
+        self.__tports.pop(port_num)
 
     def serialize(self):
         tswitch = dict()
         tswitch["id"] = self.id
         tswitch["dpid"] = self.dpid
         tswitch["prefix"] = self.prefix
-        tswitch["tports"] = serial_dict(self.tports)
+        tswitch["tports"] = serial_dict(self.__tports)
 
         return tswitch.copy()
 
-    def set_tport(self, tport):
-        port_num = tport.port_num
-        self.tports.update({port_num: tport})
-
-    def del_tport(self, tport_id):
-
-        ret = self.exist_tport(tport_id)
-
-        if ret is not None:
-            del (self.tports[ret.id])
-        else:
-            raise ValueError("the transport port was not found")
-
-    def get_tlinks(self):
-        return self.tports.values()
-
-    def exist_tport(self, tport_id):
-        tports = self.tports.values()
-
-        for tport in tports:
-            if tport.id == tport_id:
-                return tport
-        return None
 
 
 class TransportLinks(object):
     """
         tlink = {
             id: string,
-            ingress_port: int,
-            egrees_port: int
-            ingress_id: string (dpid)
-            egress_id: string (dpid)
+            start_node: string (id),
+            stop_node: string (id),
+            ingress_port: int (port_num)
+            egress_port: int (port_num)
         }
     """
 
