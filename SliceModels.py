@@ -571,6 +571,7 @@ class NetworkSlice(object):
     def exist_vswitch(self, dpid):
         ret = self.__vswitches.get(dpid, None)
 
+
         if ret is None:
             return False
         return True
