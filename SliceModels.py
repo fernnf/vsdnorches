@@ -1,4 +1,5 @@
 import time
+
 from uuid import uuid4 as rnd_id
 
 
@@ -27,43 +28,56 @@ def get_id(dpid=None):
         assert len(dpid) == 16, "dpid must have 16 digits hex decimal"
         return dpid + rnd[16:]
 
-class VirtualPort(object):
+
+status_slice = {
+        0: "CREATED",
+        1: "DEPLOYED",
+        2: "RUNNING",
+        3: "ERROR",
+        4: "STOP"
+}
+
+class VirtualInterface(object):
     """
         vport = {
-            id: string,
-            vswitch: string,
-            vport_num: int,
-            tport_num: int,
-            bandwidth: long,
-            reserved: bool,
-            encap: string
+            type: "virtual_interface"
+            interface_id: string
+            vport_num: int
+            tport_num: int
+            properties: {
+                vswitch_id: string
+                bandwidth: long
+                reserved: bool
+                encap: String (e.g. Ethernet)
+            }
         }
 
     """
 
-    def __init__(self, vswitch, vport_num, tport_num, reserved=False, bandwidth=None, encap="eth"):
+    def __init__(self, vport_num, tport_num, vswitch_id, reserved=False, bandwidth=None, encap="Ethernet"):
         self.__id = get_id()
-        self.vswitch = vswitch
+        self.vswitch_id = vswitch_id
         self.vport_num = vport_num
         self.tport_num = tport_num
         self.reserved = reserved
         self.bandwidth = bandwidth
         self.encap = encap
+        self.type = "virtual_interface"
 
     @property
-    def id(self):
+    def interface_id(self):
         return self.__id
 
-    @id.setter
-    def id(self, value):
+    @interface_id.setter
+    def interface_id(self, value):
         pass
 
     @property
-    def vswitch(self):
+    def vswitch_id(self):
         return self.__vsw
 
-    @vswitch.setter
-    def vswitch(self, value):
+    @vswitch_id.setter
+    def vswitch_id(self, value):
         self.__vsw = value
 
     @property
@@ -114,47 +128,70 @@ class VirtualPort(object):
         return obj
 
     def serialize(self):
-        vport = dict()
-        vport["id"] = self.id
-        vport["vswitch"] = self.vswitch
-        vport["vport_num"] = self.vport_num
-        vport["tport_num"] = self.tport_num
-        vport["reserved"] = self.reserved
-        vport["bandwidth"] = self.bandwidth
-        vport["encap"] = self.encap
+        vport = {
+            "type": self.type,
+            "interface_id": self.interface_id,
+            "vport_num": self.vport_num,
+            "tport_num": self.tport_num,
+            "properties": {
+                "vswitch_id": self.vswitch_id,
+                "bandwidth": self.bandwidth,
+                "reserved": self.reserved,
+                "encap": self.encap
+            },
+        }
 
         return vport.copy()
+
+    def __str__(self):
+        return str(self.serialize())
 
 
 class VirtualSwitch(object):
     """
         vswitch = {
-            id: string,
-            tenant: string,
-            dpid: string,
-            name: string,
-            tswitch: string (id),
-            protocols: list[string]
-            ports: Dict[PortNum: VirtualPort]
-         }
-
+            type: "virtual_switch"
+            device_id: string,
+            tenant_id: string,
+            tswitch_id: string,
+            label: string,
+            properties:{
+                dpid: string,
+                protocols: [string] (e.g., OpenFlow13 or None)
+            }
+            interfaces:[
+                interface_id: objects (VirtualPort)
+            ]
     """
 
-    def __init__(self, tenant, name, tswitch, dpid=None, protocols=None):
-        self.__id = get_id(dpid=dpid)
-        self.tenant = tenant
-        self.name = name
-        self.tswitch = tswitch
+    def __init__(self, tenant_id, tswitch_id, label=None, dpid=None, protocols=None):
+        self.__device_id = get_id(dpid=dpid)
+        self.type = "virtual_switch"
+        self.label = label
+        self.tenant_id = tenant_id
+        self.tswitch_id = tswitch_id
+        self.dpid = dpid
         self.protocols = protocols
-        self.__vports = {}
+        self.__interfaces = {}
 
     @property
-    def id(self):
-        return self.__id
+    def device_id(self):
+        return self.__device_id
 
-    @id.setter
-    def id(self, value):
+    @device_id.setter
+    def device_id(self, value):
         pass
+
+    @property
+    def label(self):
+        return self.__label
+
+    @label.setter
+    def label(self, value):
+        if value is None:
+            self.__label = self.dpid
+
+        self.__label = value
 
     @property
     def dpid(self):
@@ -163,25 +200,25 @@ class VirtualSwitch(object):
     @dpid.setter
     def dpid(self, value):
         if value is None:
-            self.__dpid = self.id[:16]
+            self.__dpid = self.device_id[:16]
         else:
             assert len(value) == 16, "dpid must have 16 digits hex decimal"
             self.__dpid = value
 
     @property
-    def tenant(self):
+    def tenant_id(self):
         return self.__tenant
 
-    @tenant.setter
-    def tenant(self, value):
+    @tenant_id.setter
+    def tenant_id(self, value):
         self.__tenant = value
 
     @property
-    def tswitch(self):
+    def tswitch_id(self):
         return self.__tsw
 
-    @tswitch.setter
-    def tswitch(self, value):
+    @tswitch_id.setter
+    def tswitch_id(self, value):
         self.__tsw = value
 
     @property
@@ -192,75 +229,102 @@ class VirtualSwitch(object):
     def protocols(self, value):
         self.__proto = value
 
-    def set_vports(self, vport):
-        port_num = vport.vport_num
-        self.__vports.update({port_num: vport})
+    def add_interface(self, interface):
+        id = interface.interface_id
+        p = self.__interfaces.get(id, None)
+        if p is None:
+            self.__interfaces.update({id: interface})
+        else:
+            raise ValueError("the interface already was registered")
 
-    def get_vport(self, port_num):
-        return self.__vports.get(port_num, None)
+    def rem_interface(self, interface_id):
+        ret = self.__interfaces.get(interface_id, None)
 
-    def get_vports(self):
-        return self.__vports
+        if ret is None:
+            raise ValueError("the interface was not registered")
+        else:
+            self.__interfaces.pop(interface_id)
+
+    def get_interfaces(self):
+        return self.__interfaces.values()
+
+    def get_interface(self, interface_id):
+        return self.__interfaces.get(interface_id, None)
 
     def __hash__(self) -> int:
         return super().__hash__()
 
     @classmethod
     def parser(cls, d):
-        obj = cls(tenant=d["tenant"],
-                  name=d["name"],
-                  tswitch=d["tswitch"],
+        obj = cls(tenant_id=d["tenant_id"],
+                  label=d["label"],
+                  tswitch_id=d["tswitch_id"],
                   dpid=d["dpid"],
                   protocols=d["protocols"])
 
         obj.__id = d["id"]
 
-        if len(d["vports"]) > 0:
-            vports = dict(d["vports"])
-            obj.__vports = vports
+        if len(d["interfaces"]) > 0:
+            interfaces = dict(d["interfaces"])
+            obj.__interfaces = interfaces
 
         return obj
 
     def serialize(self):
-        vswitch = dict()
-        vswitch["id"] = self.id
-        vswitch["tenant"] = self.tenant
-        vswitch["name"] = self.name
-        vswitch["tswitch"] = self.tswitch
-        vswitch["dpid"] = self.dpid
-        vswitch["protocols"] = self.protocols
-        vswitch["vports"] = serial_dict(self.__vports)
+
+        vswitch = {
+            "type": self.type,
+            "device_id": self.device_id,
+            "tenant_id": self.tenant_id,
+            "tswitch_id": self.tswitch_id,
+            "label": self.label,
+            "properties": {
+                "dpid": self.dpid,
+                "protocols": self.protocols
+            },
+            "interfaces": {
+                "interface_id": serial_dict(self.__interfaces)
+            }
+        }
 
         return vswitch.copy()
-
-
 
 
 class VirtualLink(object):
     """
         vlink = {
-            id: string
-            ingress: [(port_num, vswitch_id)]
-            egress: [(port_num, vswitch_id)]
-            type: string (vlan, vxlan)
-            key: string (vlan id, vxlan_id)
+            type: "virtual_link"
+            link_id: string
+            ingress: {
+                interface_id: string
+                vswitch_id: string
+            }
+            egress:{
+                interface_id: string
+                vswitch_id: string
+            }
+            properties {
+                tunnel: string (e.g., Vlan, Vxlan)
+                key: string
+            }
         }
 
     """
 
-    def __init__(self, ingress, egress, type, key):
-        self.__id = get_id()
+    def __init__(self, ingress, egress, tunnel, key):
+        self.__link_id = get_id()
+        self.type = "virtual_link"
         self.ingress = ingress
         self.egress = egress
-        self.type = type
+        self.tunnel = tunnel
         self.key = key
 
     @property
-    def id(self):
-        return self.__id
+    def link_id(self):
+        return self.__link_id
 
-    @id.setter
-    def id(self, value):
+    @link_id.setter
+    def link_id(self, value):
         pass
 
     @property
@@ -280,12 +344,12 @@ class VirtualLink(object):
         self.__ep = value
 
     @property
-    def type(self):
-        return self.__type
+    def tunnel(self):
+        return self.__tunnel
 
-    @type.setter
-    def type(self, value):
-        self.__type = value
+    @tunnel.setter
+    def tunnel(self, value):
+        self.__tunnel = value
 
     @property
     def key(self):
@@ -299,19 +363,30 @@ class VirtualLink(object):
     def parser(cls, d):
         obj = cls(ingress=d["ingress"],
                   egress=d["egress"],
-                  type=d["type"],
+                  tunnel=d["tunnel"],
                   key=d["key"])
-        obj.__id = d["id"]
+
+        obj.__link_id = d["link_id"]
 
         return obj
 
     def serialize(self):
-        vlink = dict()
-        vlink["id"] = self.id
-        vlink["ingress_port"] = self.ingress
-        vlink["egress_port"] = self.egress
-        vlink["type"] = self.type
-        vlink["key"] = self.key
+        vlink = {
+            "type": self.type,
+            "link_id": self.link_id,
+            "ingress": {
+                "interface_id": self.ingress["interface_id"],
+                "vswitch_id": self.ingress["vswitch_id"]
+            },
+            "egress": {
+                "interface_id": self.egress["interface_id"],
+                "vswitch_id": self.egress["vswitch_id"]
+            },
+            "properties": {
+                "tunnel": self.tunnel,
+                "key": self.key
+            }
+        }
 
         return vlink.copy()
 
@@ -319,124 +394,241 @@ class VirtualLink(object):
 class TransportSwitch(object):
     """
         tswitch = {
-            id: string,
-            dpid: string,
-            prefix: string,
-            tports: list
+            type: const ("transport_switch")
+            device_id: string,
+            interfaces {
+                interface_id: object (transport_interface)
+            }
+            properties: {
+                dpid: string
+                prefix: string  
+            }
         }
     """
 
     def __init__(self, dpid, prefix):
-        self.id = str(rnd_id())
+        self.__device_id = get_id(dpid)
         self.dpid = dpid
         self.prefix = prefix
-        self.tports = dict()
+        self.__interfaces = {}
+
+    @property
+    def device_id(self):
+        return self.__device_id
+
+    @device_id.setter
+    def device_id(self, value):
+        pass
+
+    @property
+    def dpid(self):
+        return self.__dpid
+
+    @dpid.setter
+    def dpid(self, value):
+        self.__dpid = value
+
+    @property
+    def prefix(self):
+        return self.__prefix
+
+    @prefix.setter
+    def prefix(self, value):
+        self.__prefix = value
+
+    def add_interface(self, interface):
+
+        id = interface.interface_id
+
+        ret = self.__interfaces.get(id, None)
+        if ret is None:
+            self.__interfaces.update({id: interface})
+        else:
+            raise ValueError("the interface already has registered")
+
+    def rem_interface(self, interface_id):
+        ret = self.__interfaces.get(interface_id, None)
+        if ret is None:
+            raise ValueError("the interface was not found")
+        else:
+            self.__interfaces.pop(interface_id)
+
+    def get_interface(self, interface_id):
+        return self.__interfaces.get(interface_id, None)
+
+    def get_interfaces(self):
+        return self.__interfaces.copy()
 
     @classmethod
     def parser(cls, d):
         obj = cls(d["dpid"], d["prefix"])
-        obj.id = d["id"]
+        obj.__id = d["id"]
 
-        tports = d["tports"]
-        if len(tports) > 0:
-            for tport in tports:
-                o = TransportLinks.parser(tport)
-                obj.set_tport(tport=o)
+        if len(d["interfaces"]) > 0:
+            interface = dict(d["interfaces"])
+            obj.__interfaces = interface
 
         return obj
 
     def serialize(self):
-        tswitch = dict()
-        tswitch["id"] = self.id
-        tswitch["dpid"] = self.dpid
-        tswitch["prefix"] = self.prefix
-        tswitch["tports"] = serial_dict(self.tports)
+
+        tswitch = {
+            "type": "transport_switch",
+            "device_id": self.device_id,
+            "interfaces": serial_dict(self.__interfaces),
+            "properties": {
+                "dpid": self.dpid,
+                "prefix": self.prefix
+            }
+        }
 
         return tswitch.copy()
 
-    def set_tport(self, tport):
-        port_num = tport.port_num
-        self.tports.update({port_num: tport})
-
-    def del_tport(self, tport_id):
-
-        ret = self.exist_tport(tport_id)
-
-        if ret is not None:
-            del (self.tports[ret.id])
-        else:
-            raise ValueError("the transport port was not found")
-
-    def get_tlinks(self):
-        return self.tports.values()
-
-    def exist_tport(self, tport_id):
-        tports = self.tports.values()
-
-        for tport in tports:
-            if tport.id == tport_id:
-                return tport
-        return None
+    def __hash__(self) -> int:
+        return super().__hash__()
 
 
 class TransportLinks(object):
     """
         tlink = {
-            id: string,
-            ingress_port: int,
-            egrees_port: int
-            ingress_id: string (dpid)
-            egress_id: string (dpid)
+            type: "transport_switch"
+            link_id: string,
+            ingress: {
+                interface_id: string
+                device_id: string
+            }
+            egress:{
+                interface_id: string
+                device_id: string
+            }
         }
     """
 
     @classmethod
     def parser(cls, d):
-        obj = cls(d["ingress_port"], d["egress_port"], d["ingress_id"], d["egress_id"])
-        obj.id = d["id"]
+        obj = cls(d["ingress"], d["egress"])
+        obj.__link_id = d["link_id"]
         return obj
 
-    def __init__(self, ingress_port, egress_port, tswitch_id, peer_id):
-        self.id = str(rnd_id())
-        self.ingress_port = ingress_port
-        self.egress_port = egress_port
-        self.ingress_id = tswitch_id
-        self.egress_id = peer_id
+    def __init__(self, ingress, egress):
+        self.type = "transport_switch"
+        self.link_id = get_id()
+        self.ingress = ingress
+        self.egress = egress
+
+    @property
+    def link_id(self):
+        return self.__link_id
+
+    @link_id.setter
+    def link_id(self, value):
+        self.__link_id = value
+
+    @property
+    def ingress(self):
+        return self.__ingress
+
+    @ingress.setter
+    def ingress(self, value):
+        self.__ingress = value
+
+    @property
+    def egress(self):
+        return self.__egress
+
+    @egress.setter
+    def egress(self, value):
+        self.__egress = value
 
     def serialize(self):
-        tlink = dict()
-        tlink["id"] = self.id
-        tlink["ingress_port"] = self.ingress_port
-        tlink["egress_port"] = self.egress_port
-        tlink["ingress_id"] = self.ingress_id
-        tlink["egress_id"] = self.egress_id
+        tlink = {
+            "type": "transport_switch",
+            "link_id": self.link_id,
+            "ingress": {
+                "interface_id": self.ingress["interface_id"],
+                "device_id": self.ingress["device_id"]
+            },
+            "egress": {
+                "interface_id": self.egress["interface_id"],
+                "device_id": self.egress["device_id"]
+            }
+        }
+
         return tlink.copy()
 
 
-class TransportPort(object):
+class TransportInterface(object):
     """
         tport = {
+            type: "transport_interface"
             id: string,
-            tswitch: string
-            port_num: int
-            encap: string
+            properties:{
+                device_id: string
+                port_num: int
+                encap: string
+            }
         }
     """
 
-    def __init__(self, port_num, encap="eth"):
-        self.id = str(rnd_id())
+    def __init__(self, device_id, port_num, encap="eth"):
+        self.type = "transport_interface"
+        self.interface_id = get_id()
+        self.device_id = device_id
         self.port_num = port_num
         self.encap = encap
 
+    @property
+    def interface_id(self):
+        return self.__interface_id
+
+    @interface_id.setter
+    def interface_id(self, value):
+        self.__interface_id = value
+
+    @property
+    def device_id(self):
+        return self.__device_id
+
+    @device_id.setter
+    def device_id(self, value):
+        self.__device_id = value
+
+    @property
+    def port_num(self):
+        return self.__port_num
+
+    @port_num.setter
+    def port_num(self, value):
+        self.__port_num = value
+
+    @property
+    def encap(self):
+        return self.__encap
+
+    @encap.setter
+    def encap(self, value):
+        self.__encap = value
+
     @classmethod
     def parser(cls, d):
-        obj = cls(d["port_num"], d["encap"])
-        obj.id = d["id"]
+        obj = cls(device_id=d["device_id"],
+                  port_num=d["port_num"],
+                  encap=d["encap"])
+
+        obj.__id = d["id"]
+        return obj
 
     def serialize(self):
-        tport = dict()
-        tport["port_num"] = self.port_num
-        tport["encap"] = self.encap
+        tport = {
+            "type": "transport_interface",
+            "interface_id": self.interface_id,
+            "properties": {
+                "device_id": self.device_id,
+                "port_num": self.port_num,
+                "encap": self.encap
+            }
+        }
+
         return tport.copy()
 
     def __hash__(self) -> int:
@@ -446,92 +638,155 @@ class TransportPort(object):
 class NetworkSlice(object):
     """
         netslice = {
-            id: string,
-            status: String
-            tenant: int
-            controller: string
-            vswitches: list[string]
-            vlinks: list[string]
+            type: "virtual_network"
+            slice_id: string,
+            tenant_id: string
+            label: string
+            properties: {
+                status: string
+                revision: string
+                controller: string
+            }
+            nodes: {
+                device_id: object
+            }
+
+            links {
+                link_id: object
+            }
         }
     """
 
-    status_slice = {
-        0: "CREATED",
-        1: "DEPLOYED",
-        2: "RUNNING",
-        3: "ERROR",
-        4: "STOP"
-    }
+    def __init__(self, tenant_id, label, controller):
+
+        self.type = "virtual_network"
+        self.slice_id = get_id()
+        self.tenant_id = tenant_id
+        self.label = label
+        self.status = status_slice.get(0)
+        self.revision = get_deploy_time()
+        self.controller = controller
+        self.__nodes= {}
+        self.__links = {}
+
+
+    @property
+    def slice_id(self):
+        return self.__slice_id
+
+    @slice_id.setter
+    def slice_id(self, value):
+        self.__slice_id = value
+
+    @property
+    def tenant_id(self):
+        return self.__tenant_id
+
+    @tenant_id.setter
+    def tenant_id(self, value):
+        self.__tenant_id = value
+
+    @property
+    def label(self):
+        return self.__label
+
+    @label.setter
+    def label(self, value):
+        self.__label = value
+
+    @property
+    def revision(self):
+        return self.__revision
+
+    @revision.setter
+    def revision(self, value):
+        self.__revision = value
+
+    @property
+    def status(self):
+        return self.__status
+
+    @status.setter
+    def status(self, value):
+        self.__status = value
+
+    @property
+    def controller(self):
+        return self.__controller
+
+    @controller.setter
+    def controller(self, value):
+        self.__controller = value
+
+    def add_node(self, device):
+
+        id = device.device_id
+
+        ret = self.__nodes.get(id, None)
+        if ret is None:
+            self.__nodes.update({id: device})
+        else:
+            raise ValueError("the node already has been included")
+
+    def rem_node(self, device_id):
+
+        ret = self.__nodes.get(device_id, None)
+        if ret is None:
+            raise ValueError("the node was not found")
+        else:
+            self.__nodes.pop(device_id)
+
+    def get_node(self, device_id):
+        return self.__nodes.get(device_id, None)
+
+    def get_nodes(self):
+        return self.__nodes.values()
+
+    def add_link(self, link):
+        id = link.link_id
+        ret = self.__links.get(id)
+        if ret is None:
+            self.__nodes.update({id: link})
+        else:
+            raise ValueError("the link already has been included")
+
+    def rem_link(self, link_id):
+
+        ret = self.__links.get(link_id, None)
+        if ret is None:
+            raise ValueError("the node was not found")
+        else:
+            self.__links.pop(link_id)
+
+    def get_link(self, link_id):
+        return self.__links.get(link_id, None)
+
+    def get_links(self):
+        return self.__links.values()
 
     @classmethod
     def parser(cls, d: dict):
-        obj = cls(tenant=d["tenant"], controller=d["controller"])
-        obj.id = d["id"]
+        obj = cls(tenant_id=d["tenant_id"],
+                  controller=d["controller"],
+                  label=d["label"])
 
-        if len(d["vswitches"]) > 0:
+        obj.__status = d["status"]
+        obj.__revision = d["revision"]
+        obj.__slice_id = d["slice_id"]
 
-            vswitches = d["vswitches"]
-            for vswitch in vswitches:
-                o = VirtualSwitch.parser(vswitch)
-                obj.add_vswitch(vswitch=o)
+        if len(d["nodes"]) > 0:
+            nodes = d["nodes"]
+            for node in nodes:
+                n = VirtualSwitch.parser(node)
+                obj.add_node(n)
 
-        if len(d["vlinks"]) > 0:
-            vlinks = d["vlinks"]
-            for vlink in vlinks:
-                o = VirtualLink.parser(vlink)
-                obj.add_vlink(vlink=o)
+        if len(d["links"]) > 0:
+            links = d["links"]
+            for link in links:
+                o = VirtualLink.parser(link)
+                obj.add_link(link=o)
 
         return cls
-
-    def __init__(self, tenant, controller):
-        self.id = str(rnd_id())
-        self.status = self.status_slice.get(0)
-        self.tenant = tenant
-        self.controller = controller
-        self.__vswitches = {}
-        self.__vlinks = []
-
-    def add_vswitch(self, vswitch):
-        dpid = vswitch["dpid"]
-        self.__vswitches.update({dpid: vswitch})
-
-    def rem_vswitch(self, dpid):
-        if self.exist_vswitch(dpid):
-            del (self.__vswitches[dpid])
-        else:
-            raise ValueError("the virtual switch was not found")
-
-    def add_vlink(self, vlink):
-        self.__vlinks.append(vlink)
-
-    def rem_vlink(self, vlink_id):
-        ret = self.exist_vlink(vlink_id)
-        if ret is not None:
-            self.__vlinks.remove(ret)
-        else:
-            raise ValueError("the virtual link was not found")
-
-    def get_vswitches(self):
-        return self.__vswitches.keys()
-
-    def get_vswitch(self, dpid):
-        return self.__vswitches.get(dpid)
-
-    def get_links(self):
-        return self.__vlinks.copy()
-
-    def exist_vswitch(self, dpid):
-        ret = self.__vswitches.get(dpid, None)
-
-        if ret is None:
-            return False
-        return True
-
-    def exist_vlink(self, vlink_id):
-        for vlink in self.__vlinks:
-            if vlink.id == vlink_id:
-                return vlink
-        return None
 
     def serialize(self):
         netslice = dict()
@@ -594,7 +849,7 @@ class SliceInfo(object):
 
     @property
     def slice_id(self):
-        return self.slice.id
+        return self.slice.interface_id
 
     @slice_id.setter
     def slice_id(self, value):

@@ -47,11 +47,11 @@ class SliceManager(ApplicationSession):
     def create(self, slice):
         s = NetworkSlice.parser(slice)
 
-        ret = self.get_slice_status(s.id)
+        ret = self.get_slice_status(s.interface_id)
         if ret is None:
-            self.__networkslices.update({s.id: slice})
-            self.log.info("new slice {i} has created ".format(i=s.id))
-            return s.id
+            self.__networkslices.update({s.interface_id: slice})
+            self.log.info("new slice {i} has created ".format(i=s.interface_id))
+            return s.interface_id
         else:
             self.log.info("the slice has been deployed")
 
@@ -95,7 +95,7 @@ class SliceManager(ApplicationSession):
         if ret is None:
             slice.add_vswitch(vsw)
             self.__networkslices.update({slice_id: slice})
-            self.log.info("new virtual switch {i} has created".format(i=vsw.id))
+            self.log.info("new virtual switch {i} has created".format(i=vsw.interface_id))
             return False, None
         else:
             msg = "Cannot add a virtual switch in slice already has deployed"
@@ -111,7 +111,7 @@ class SliceManager(ApplicationSession):
         if ret is None:
             slice.rem_vswitch(vsw.dpid)
             self.__networkslices.update({slice_id: slice})
-            self.log.info("the virtual switch {i} has removed".format(i=vsw.id))
+            self.log.info("the virtual switch {i} has removed".format(i=vsw.interface_id))
             return False, None
         else:
             msg = "Cannot remove a virtual switch in slice already has deployed"
