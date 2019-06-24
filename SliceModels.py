@@ -401,7 +401,7 @@ class TransportSwitch(object):
             }
             properties: {
                 dpid: string
-                prefix: string  
+                prefix: string
             }
         }
     """
