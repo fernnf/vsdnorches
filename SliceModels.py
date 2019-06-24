@@ -831,6 +831,7 @@ class SliceInfo(object):
             3: "ERROR"
         }.get(value, None)
 
+
     @property
     def deploy_time(self):
         return self.__date
