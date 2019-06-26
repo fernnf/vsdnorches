@@ -2,7 +2,7 @@ from autobahn.twisted.wamp import ApplicationSession
 from autobahn import wamp
 from SliceManager import NetworkSlice, VirtualLink, VirtualSwitch
 
-from SliceModels import SliceInfo
+from SliceModels import NetworkSlice, SliceStatus
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -10,31 +10,40 @@ from twisted.internet.defer import inlineCallbacks
 PREFIX = "vsdnorches.slicebuilder"
 
 
-"""
-slice_status = {
-    "STOPPED": 0,
-    "RUNNING": 1,
-    "ERROR": 2,
-    "DEPLOYING": 3
-}
-"""
-
-
-
-
-
-
 class SliceBuilder(ApplicationSession):
 
     def __init__(self, *args, **kwargs):
         super(SliceBuilder, self).__init__(*args, **kwargs)
         self.__slices = {}
+        self.
         self.log.info("Starting Slice Builer...")
 
     def onJoin(self, details):
         pass
 
-    def register_vswitch(self, vswitches):
+    @wamp.subscribe(uri="{p}.register_node".format(p=PREFIX))
+    def register_node(self, msg):
+
+
+    def _register_node(self, slice):
+        o = NetworkSlice.parser(slice)
+        o.status = SliceStatus.DEPLOYING.name
+        id = o.slice_id
+        self.__slices.update({id: o})
+        self.log.info("new slice {i} has registered".format(i=id))
+
+    def _deploy_nodes (self, nodes):
+
+        _
+
+        for k,v  in nodes.items():
+            #TODO: Build the node on agent
+            pass
+
+    def _deploy_links(self, links):
+        for k,v in links.items():
+
+            pass
 
 
 

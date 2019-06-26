@@ -2,6 +2,8 @@ import time
 
 from uuid import uuid4 as rnd_id
 
+from enum import Enum, unique
+
 
 def get_deploy_time():
     return time.asctime(time.localtime(time.time()))
@@ -29,13 +31,14 @@ def get_id(dpid=None):
         return dpid + rnd[16:]
 
 
-status_slice = {
-        0: "CREATED",
-        1: "DEPLOYED",
-        2: "RUNNING",
-        3: "ERROR",
-        4: "STOP"
-}
+class SliceStatus(Enum):
+    CREATED = 0
+    DEPLOYING = 1
+    DEPLOYED = 2
+    RUNNING = 3
+    STOPPED = 4
+    ERROR = 5
+
 
 class VirtualInterface(object):
     """
@@ -266,7 +269,10 @@ class VirtualSwitch(object):
 
         if len(d["interfaces"]) > 0:
             interfaces = dict(d["interfaces"])
-            obj.__interfaces = interfaces
+
+            for interface in interfaces:
+                o = VirtualInterface.parser(interface)
+                obj.add_interface(o)
 
         return obj
 
@@ -462,11 +468,14 @@ class TransportSwitch(object):
     @classmethod
     def parser(cls, d):
         obj = cls(d["dpid"], d["prefix"])
+
         obj.__id = d["id"]
 
         if len(d["interfaces"]) > 0:
-            interface = dict(d["interfaces"])
-            obj.__interfaces = interface
+            interfaces = dict(d["interfaces"])
+            for interface in interfaces:
+                o = TransportInterface.parser(interface)
+                obj.add_interface(o)
 
         return obj
 
@@ -663,12 +672,11 @@ class NetworkSlice(object):
         self.slice_id = get_id()
         self.tenant_id = tenant_id
         self.label = label
-        self.status = status_slice.get(0)
+        self.status = SliceStatus.CREATED
         self.revision = get_deploy_time()
         self.controller = controller
-        self.__nodes= {}
+        self.__nodes = {}
         self.__links = {}
-
 
     @property
     def slice_id(self):
@@ -708,6 +716,7 @@ class NetworkSlice(object):
 
     @status.setter
     def status(self, value):
+
         self.__status = value
 
     @property
@@ -789,77 +798,23 @@ class NetworkSlice(object):
         return cls
 
     def serialize(self):
-        netslice = dict()
-        netslice["id"] = self.id
-        netslice["status"] = self.status
-        netslice["tenant"] = self.tenant
-        netslice["vswitches"] = serial_dict(self.__vswitches)
-        netslice["vlinks"] = serial_list(self.__vlinks)
+
+        netslice = {
+            "type": "virtual_network",
+            "slice_id": self.slice_id,
+            "tenant_id": self.tenant_id,
+            "label": self.label,
+            "properties": {
+                "status": self.status,
+                "revision": self.revision,
+                "controller": self.controller
+            },
+            "nodes": serial_dict(self.__nodes),
+
+            "links": serial_dict(self.__links)
+        }
 
         return netslice.copy()
 
-    def set_status(self, status):
-        s = self.status_slice.get(status, None)
-        if s is None:
-            raise ValueError("The status value is not valid")
-
-        self.status = s
-
-    def get_status(self):
-        return self.status
-
     def __hash__(self) -> int:
         return super().__hash__()
-
-
-class SliceInfo(object):
-    def __init__(self, slice):
-        self.status = 0
-        self.date = get_deploy_time()
-        self.slice = slice
-
-    @property
-    def status(self):
-        return self.__status
-
-    @status.setter
-    def status(self, value):
-        self.__status = {
-            0: "DEPLOYING",
-            1: "RUNNING",
-            2: "STOPPED",
-            3: "ERROR"
-        }.get(value, None)
-
-
-    @property
-    def deploy_time(self):
-        return self.__date
-
-    @deploy_time.setter
-    def deploy_time(self, value):
-        self.__date = value
-
-    @property
-    def slice(self):
-        return self.__slice
-
-    @slice.setter
-    def slice(self, value):
-        self.__slice = value
-
-    @property
-    def slice_id(self):
-        return self.slice.interface_id
-
-    @slice_id.setter
-    def slice_id(self, value):
-        pass
-
-    def serialize(self):
-        info = dict()
-        info["status"] = self.status
-        info["deploy_time"] = self.deploy_time
-        info["slice"] = self.slice.serialized()
-
-        return info.copy()
