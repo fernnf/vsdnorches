@@ -497,94 +497,132 @@ class TransportSwitch(object):
         return super().__hash__()
 
 
-class TransportLinks(object):
+class TransportLink(object):
     """
         tlink = {
-            type: "transport_switch"
-            link_id: string,
-            ingress: {
-                interface_id: string
-                device_id: string
-            }
-            egress:{
-                interface_id: string
-                device_id: string
-            }
+            "type": string (transport)
+            "link_id": string,
+            "encap": string,
+            "ingress": object,
+            "egress": object,
         }
     """
 
     @classmethod
     def parser(cls, d):
-        obj = cls(d["ingress"], d["egress"])
-        obj.__link_id = d["link_id"]
+        obj = cls()
+        obj._link_id = d["link_id"]
+        obj._encap = d["encap"]
+        obj._
+
+
+        obj._properties = d["properties"]
         return obj
 
-    def __init__(self, ingress, egress):
-        self.type = "transport_switch"
-        self.link_id = get_id()
-        self.ingress = ingress
-        self.egress = egress
+    def __init__(self):
+        self._type = "transport"
+        self._link_id = get_id()
+        self._ingress = None
+        self._egress = None
+        self._encap = None
+        self._properties = {}
 
-    @property
-    def link_id(self):
-        return self.__link_id
+    def get_type(self):
+        return self._type
 
-    @link_id.setter
-    def link_id(self, value):
-        self.__link_id = value
+    def get_id(self):
+        return self._link_id
 
-    @property
-    def ingress(self):
-        return self.__ingress
+    def get_encap(self):
+        return self._encap
 
-    @ingress.setter
-    def ingress(self, value):
-        self.__ingress = value
+    def get_ingress_interface(self):
+        return self._ingress
 
-    @property
-    def egress(self):
-        return self.__egress
+    def get_egress_interface(self):
+        return self._egress
 
-    @egress.setter
-    def egress(self, value):
-        self.__egress = value
+    def set_encap(self, encap="ethernet"):
+        self._encap = encap
+
+    def set_ingress_interface(self, interface):
+        self._ingress = interface
+
+    def set_egress_interface(self, interface):
+        self._egress = interface
 
     def serialize(self):
         tlink = {
-            "type": "transport_switch",
-            "link_id": self.link_id,
-            "ingress": {
-                "interface_id": self.ingress["interface_id"],
-                "device_id": self.ingress["device_id"]
-            },
-            "egress": {
-                "interface_id": self.egress["interface_id"],
-                "device_id": self.egress["device_id"]
-            }
+            "type": self.get_type(),
+            "link_id": self.get_id(),
+            "encap": self.get_encap(),
+            "ingress": self.get_ingress_interface().serialize(),
+            "egress": self.get_egress_interface().serialize()
         }
 
         return tlink.copy()
+
+    def __str__(self) -> str:
+        return super().__str__(self.serialize())
+
+    def __hash__(self) -> int:
+        return super().__hash__()
+
+    def __eq__(self, o: object) -> bool:
+        return super().__eq__(o)
 
 
 class TransportInterface(object):
     """
         tport = {
-            type: "transport_interface"
-            id: string,
-            properties:{
-                device_id: string
-                port_num: int
-                encap: string
-            }
+            "type": "transport"
+            "interface_id": string,
+            "device_id": string
+            "port_num": string
+            "encap": string
         }
     """
 
     def __init__(self, device_id, port_num, encap="eth"):
-        self.type = "transport_interface"
-        self.interface_id = get_id()
-        self.device_id = device_id
-        self.port_num = port_num
-        self.encap = encap
+        self._type = "transport_interface"
+        self._interface_id = get_id()
+        self._device_id = device_id
+        self._port_num = port_num
+        self._encap = encap
+
+    def get_type(self):
+        return self._type
+
+    def get_id(self):
+        return self._interface_id
+
+    def get_port_num(self):
+        return self._port_num
+
+    def get_device_id(self):
+        return self._device_id
+
+    def get_encap(self):
+        return self._encap
+
+    def set_port_num(self, portnum):
+        self.port_num = portnum
+
+    def set_device_id(self, device_id):
+        self._device_id =  device_id
+
+    def set_encap(self, encap = "ethernet"):
+        self._encap = encap
+
+    @classmethod
+    def parser(cls, d):
+        obj = cls(device_id=d["device_id"],
+                  port_num=d["port_num"],
+                  encap=d["encap"])
+
+        obj._interface_id = d["id"]
+        return obj
+
 
     @property
     def interface_id(self):
