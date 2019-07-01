@@ -55,7 +55,6 @@ class VirtualSwitch(object):
     """
 
     def __init__(self):
-
         self._type = "virtual_switch"
         self._virtual_device_id = get_id()
         self._transport_device_id = None
@@ -63,7 +62,6 @@ class VirtualSwitch(object):
         self._label = None
         self._datapath_id = None
         self._protocols = []
-        self._interfaces = {}
 
     def get_type(self):
         return self._type
@@ -86,12 +84,6 @@ class VirtualSwitch(object):
     def get_protocols(self):
         return self._protocols
 
-    def get_interfaces(self):
-        return self._interfaces.copy()
-
-    def get_interface(self, device_id):
-        return self._interfaces.get(device_id, None)
-
     def set_transport_device_id(self, device_id):
         self._transport_device_id = device_id
 
@@ -110,17 +102,6 @@ class VirtualSwitch(object):
     def set_protocols(self, protocols):
         self._protocols = protocols
 
-    def set_interface(self, interface):
-        id = interface.get_id()
-        self._interfaces.update({id: interface})
-
-    def del_interface(self, interface_id):
-        ret = self._interfaces.get(interface_id, None)
-        if ret is None:
-            raise ValueError("the virtual interface was not found")
-        else:
-            self._interfaces.pop(interface_id)
-
     @classmethod
     def parser(cls, d):
         obj = cls()
@@ -132,16 +113,9 @@ class VirtualSwitch(object):
         obj.set_datapath_id(dpid=d["datapath_id"])
         obj.set_protocols(protocols=d["protocols"])
 
-        interfaces = d["interfaces"]
-        if len(interfaces) > 0:
-            for interface in interfaces:
-                o = VirtualInterface.parser(interface)
-                obj.set_interface(interface=o)
-
         return obj
 
     def serialize(self):
-
         vswitch = {
             "type": self.get_type(),
             "virtual_device_id": self.get_id(),
@@ -150,7 +124,6 @@ class VirtualSwitch(object):
             "label": self.get_label(),
             "datapath_id": self.get_datapath_id(),
             "protocols": self.get_protocols(),
-            "interfaces": serial_dict(self.get_interfaces())
         }
 
         return vswitch.copy()
@@ -228,8 +201,8 @@ class VirtualInterface(object):
         obj = cls()
         obj._interface_id = d["id"]
         obj.set_device_id(device_id=d["device_id"])
-        obj.set_phy_portnum(portnum=d["phy_portnum"])
-        obj.set_vir_portnum(portnum=d["vir_portnum"])
+        obj.set_phy_portnum(phy_portnum=d["phy_portnum"])
+        obj.set_vir_portnum(virt_portnum=d["vir_portnum"])
         obj.set_reserved(reserved=d["reserved"])
         obj.set_bandwidth(bandwidth=d["bandwidth"])
         obj.set_encap(encap=d["encap"])
@@ -241,8 +214,8 @@ class VirtualInterface(object):
             "type": self.get_type(),
             "interface_id": self.get_id(),
             "device_id": self.get_device_id(),
-            "virt_portnum": self.get_virtual_portnum(),
-            "phy_portnum": self.get_transport_portnum(),
+            "virt_portnum": self.get_virt_portnum(),
+            "phy_portnum": self.get_phy_portnum(),
             "reserved": self.get_reserved(),
             "bandwidth": self.get_bandwidth(),
             "encap": self.get_encap()
@@ -305,11 +278,11 @@ class VirtualLink(object):
     def set_key(self, key):
         self._key = key
 
-    def set_ingress(self, ingress):
-        self._ingress = ingress
+    def set_ingress(self, device_id, portnum):
+        self._ingress = {"device_id": device_id, "portnum":portnum}
 
-    def set_egress(self, egress):
-        self._egress = egress
+    def set_egress(self, device_id, portnum):
+        self._egress = {"device_id": device_id, "portnum":portnum}
 
     @classmethod
     def parser(cls, d):
@@ -318,11 +291,11 @@ class VirtualLink(object):
         obj.set_tunnel(tunnel=d["tunnel"])
         obj.set_key(key=d["key"])
 
-        i = VirtualInterface.parser(d["ingress"])
-        obj.set_ingress(ingress=i)
+        ingress = d["ingress"]
+        obj.set_ingress(ingress["device_id"], ingress["portnum"])
 
-        e = VirtualInterface.parser(d["egress"])
-        obj.set_egress(egress=e)
+        egress = d["egress"]
+        obj.set_egress(egress["device_id"], egress["portnum"])
 
         return obj
 
@@ -354,9 +327,6 @@ class TransportSwitch(object):
             "device_id": string,
             "datapath_id": string
             "prefix_uri": string
-            "interfaces": {
-                "string (interface_id)": object (transport_interface)
-            }
         }
     """
 
@@ -365,7 +335,6 @@ class TransportSwitch(object):
         self._device_id = get_id()
         self._datapath_id = None
         self._prefix_uri = None
-        self._interfaces = {}
 
     def get_type(self):
         return self._type
@@ -379,29 +348,11 @@ class TransportSwitch(object):
     def get_prefix_uri(self):
         return self._prefix_uri
 
-    def get_interfaces(self):
-        return self._interfaces.copy()
-
-    def get_interface(self, interface_id):
-        return self._interfaces.get(interface_id, None)
-
     def set_datapath_id(self, dpid):
         self._datapath_id = dpid
 
     def set_prefix_uri(self, prefix):
         self._prefix_uri = prefix
-
-    def set_interface(self, interface):
-        id = interface.get_id()
-        self._interfaces.update({id: interface})
-
-    def del_interface(self, interface_id):
-        ret = self._interfaces.get(interface_id, None)
-
-        if ret is None:
-            raise ValueError("the interface was not found")
-        else:
-            self._interfaces.pop(interface_id)
 
     @classmethod
     def parser(cls, d):
@@ -409,23 +360,16 @@ class TransportSwitch(object):
 
         obj._device_id = d["device_id"]
         obj.set_datapath_id(dpid=d["datapath_id"])
-
-        interfaces = d["interfaces"]
-        if len(interfaces) > 0:
-            for interface in interfaces:
-                i = TransportInterface.parser(interface)
-                obj.set_interface(interface=i)
+        obj.set_prefix_uri(prefix=d["prefix_uri"])
 
         return obj
 
     def serialize(self):
-
         tswitch = {
             "type": self.get_type(),
             "device_id": self.get_id(),
             "datapath_id": self.get_datapath_id(),
             "prefix_uri": self.get_prefix_uri(),
-            "interfaces": serial_dict(self.get_interfaces())
         }
 
         return tswitch.copy()
@@ -438,6 +382,7 @@ class TransportSwitch(object):
 
     def __str__(self) -> str:
         return super().__str__(str(self.serialize()))
+
 
 class TransportInterface(object):
     """
@@ -473,7 +418,7 @@ class TransportInterface(object):
         return self._encap
 
     def set_portnum(self, portnum):
-        self.portnum = portnum
+        self._portnum = portnum
 
     def set_device_id(self, device_id):
         self._device_id = device_id
@@ -493,6 +438,7 @@ class TransportInterface(object):
         return obj
 
     def serialize(self):
+
         tport = {
             "type": self.get_type(),
             "interface_id": self.get_id(),
@@ -513,7 +459,6 @@ class TransportInterface(object):
         return super().__str__(str(self.serialize()))
 
 
-
 class TransportLink(object):
     """
         tlink = {
@@ -521,8 +466,8 @@ class TransportLink(object):
             "link_id": string,
             "tunnel": string,
             "key": string
-            "ingress": object,
-            "egress": object,
+            "ingress": {interface_id: string, portnum: int}
+            "egress": {interface_id: string, portnum: int}
         }
     """
 
@@ -531,11 +476,11 @@ class TransportLink(object):
         obj = cls()
         obj._link_id = d["link_id"]
 
-        i = TransportInterface.parser(d["ingress"])
-        obj.set_ingress_interface(i)
+        ingress = d["ingress"]
+        egress = d["egress"]
 
-        e = TransportInterface.parser(d["egress"])
-        obj.set_egress_interface(e)
+        obj.set_ingress(interface_id=ingress["interface_id"], portnum=ingress["portnum"])
+        obj.set_egress(interface_id=egress["interface_id"], portnum=egress["portnum"])
 
         obj.set_key(key=d["key"])
         obj.set_tunnel(tunnel=d["tunnel"])
@@ -562,10 +507,10 @@ class TransportLink(object):
     def get_key(self):
         return self._key
 
-    def get_ingress_interface(self) -> TransportInterface:
+    def get_ingress(self):
         return self._ingress
 
-    def get_egress_interface(self) -> TransportInterface:
+    def get_egress(self):
         return self._egress
 
     def set_tunnel(self, tunnel):
@@ -575,11 +520,11 @@ class TransportLink(object):
     def set_key(self, key):
         self._key = key
 
-    def set_ingress_interface(self, interface):
-        self._ingress = interface
+    def set_ingress(self, device_id, portnum):
+        self._ingress = {"device_id": device_id, "portnum": portnum}
 
-    def set_egress_interface(self, interface) :
-        self._egress = interface
+    def set_egress(self, device_id, portnum):
+        self._egress = {"device_id": device_id, "portnum": portnum}
 
     def serialize(self):
         tlink = {
@@ -587,8 +532,8 @@ class TransportLink(object):
             "link_id": self.get_id(),
             "tunnel": self.get_tunnel(),
             "key": self.get_key(),
-            "ingress": self.get_ingress_interface().serialize(),
-            "egress": self.get_egress_interface().serialize()
+            "ingress": self.get_ingress(),
+            "egress": self.get_egress()
         }
 
         return tlink.copy()
@@ -603,7 +548,6 @@ class TransportLink(object):
         return super().__eq__(o)
 
 
-
 class NetworkSlice(object):
     """
         netslice = {
@@ -614,21 +558,17 @@ class NetworkSlice(object):
             "label": string,
             "status": string,
             "controller": string,
-            "nodes": { "device_id": object },
-            "links": { "link_id": object },
         }
     """
 
     def __init__(self):
         self._type = "virtual_network"
-        self._slice_id = None
+        self._slice_id = get_id()
         self._tenant_id = None
         self._status = SliceStatus.CREATED.name
         self._revision = get_deploy_time()
         self._label = None
         self._controller = None
-        self._nodes = {}
-        self._links = {}
 
     def get_type(self):
         return self._type
@@ -651,18 +591,6 @@ class NetworkSlice(object):
     def get_revision(self):
         return self._revision
 
-    def get_nodes(self):
-        return self._nodes.copy()
-
-    def get_node(self, device_id):
-        return self._nodes.get(device_id, None)
-
-    def get_links(self):
-        return self._links.copy()
-
-    def get_link(self, link_id):
-        return self._links.get(link_id, None)
-
     def set_tenant_id(self, tenant_id):
         self._tenant_id = tenant_id
 
@@ -678,29 +606,6 @@ class NetworkSlice(object):
     def set_revision(self, revision):
         self._revision = revision
 
-    def set_node(self, node):
-        id = node.get_id()
-        self._nodes.update({id: node})
-
-    def set_link(self, link):
-        id = link.get_id()
-        self._links.update({id: link})
-
-    def del_node(self, device_id):
-        ret = self._nodes.get(device_id, None)
-        if ret is None:
-            raise ValueError("the node was not found")
-        else:
-            self._nodes.pop(device_id)
-
-    def del_link(self, link_id):
-        ret = self._links.get(link_id, None)
-
-        if ret is None:
-            raise ValueError("the link was not found")
-        else:
-            self._links.pop(link_id)
-
     @classmethod
     def parser(cls, d):
         obj = cls()
@@ -710,18 +615,6 @@ class NetworkSlice(object):
         obj.set_tenant_id(tenant_id=d["tenant_id"])
         obj.set_controller(controller=d["controller"])
         obj.set_revision(revision=d["revision"])
-
-        nodes = d["nodes"]
-
-        if len(nodes) > 0:
-            for node in nodes:
-                obj.set_node(node=node)
-
-        links = d["links"]
-
-        if len(links) > 0:
-            for link in links:
-                obj.set_link(link)
 
         return obj
 
@@ -735,8 +628,6 @@ class NetworkSlice(object):
             "label": self.get_label(),
             "status": self.get_status(),
             "controller": self.get_controller(),
-            "nodes": serial_dict(self.get_nodes()),
-            "links": serial_dict(self.get_links()),
         }
 
         return netslice.copy()
