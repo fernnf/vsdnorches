@@ -466,8 +466,8 @@ class TransportLink(object):
             "link_id": string,
             "tunnel": string,
             "key": string
-            "ingress": {interface_id: string, portnum: int}
-            "egress": {interface_id: string, portnum: int}
+            "ingress": {device_id: string, portnum: int}
+            "egress": {device_id: string, portnum: int}
         }
     """
 
@@ -479,8 +479,8 @@ class TransportLink(object):
         ingress = d["ingress"]
         egress = d["egress"]
 
-        obj.set_ingress(interface_id=ingress["interface_id"], portnum=ingress["portnum"])
-        obj.set_egress(interface_id=egress["interface_id"], portnum=egress["portnum"])
+        obj.set_ingress(device_id=ingress["device_id"], portnum=ingress["portnum"])
+        obj.set_egress(device_id=egress["device_id"], portnum=egress["portnum"])
 
         obj.set_key(key=d["key"])
         obj.set_tunnel(tunnel=d["tunnel"])

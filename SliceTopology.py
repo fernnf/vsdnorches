@@ -77,6 +77,15 @@ class TransportTopologyController(object):
     def get_count_links(self):
         return self._transport_topology.number_of_edges()
 
+    def get_link(self, link_id):
+        links = list(self._transport_topology.edges(data=True))
+        for link in links:
+            lid = link[2]["properties"]["link_id"]
+            if lid.__eq__(link_id):
+                return False, (link[0], link[1])
+
+        return True, "the link was not found"
+
     def to_json(self):
         j = nxparser.node_link_data(self._transport_topology)
         return j
@@ -92,6 +101,12 @@ class SliceTopologyController(object):
         obj = cls()
         obj._slice_topology = nxparser.node_link_graph(j)
         return obj
+
+    def set_proper_slice(self, slice):
+        self._slice_topology.graph.update({"properties": slice})
+
+    def get_slice_id(self):
+        return self._slice_topology.graph["properties"].get("slice_id", None)
 
     def add_virt_node(self, node):
         vn = VirtualSwitch.parser(node)
@@ -155,10 +170,8 @@ class TopologyService(ApplicationSession):
     def onJoin(self, details):
         self.log.info("Starting Topology Service...")
 
-
-
-    @wamp.register(uri="{p}.add_node")
-    def add_transport_node(self, node):
+    @wamp.register(uri="{p}.add_phy_node")
+    def add_phy_node(self, node):
         try:
             self._transport_topology.add_node(node)
             self.log.info("new transport device {i} has added".format(i=node["device_id"]))
@@ -166,8 +179,8 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{p}.rem_device")
-    def rem_node(self, device_id):
+    @wamp.register(uri="{p}.rem_phy_node")
+    def rem_phy_node(self, device_id):
 
         try:
             self._transport_topology.rem_node(device_id)
@@ -176,8 +189,61 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{i}.add_link")
-    def add_link(self, link):
-        l = TransportLink.parser(link)
+    @wamp.register(uri="{i}.add_phy_link")
+    def add_phy_link(self, link):
         try:
-            self.
+            self._transport_topology.add_link(link)
+            self.log.info("new physical link {i} was added".format(i=link["link_id"]))
+            return False, None
+        except Exception as ex:
+            return True, ex
+
+    @wamp.register(uri="{i}.rem_phy_link")
+    def rem_phy_link(self, link_id):
+        try:
+            error, d = self._transport_topology.get_link(link_id)
+            if not error:
+                self._transport_topology.rem_link(d[0], d[1])
+                self.log.info("the link {i} was remove".format(i=link_id))
+                return False, None
+            else:
+                self.log.error(d)
+        except Exception as ex:
+            return True, ex
+
+    @wamp.register(uri="{i}.create_slice")
+    def create_slice(self, slice):
+        s = SliceTopologyController(slice=slice)
+
+        try:
+            self._virtual_topology.update({s.get_slice_id(): s})
+            self.log.info("new slice {i} was created".format(i=s.get_slice_id()))
+            return False, s.get_slice_id()
+        except Exception as ex:
+            return True, ex
+
+    @wamp.register(uri="{i}.add_virt_node")
+    def add_virt_node(self, slice_id, vnode):
+        try:
+            s = self._virtual_topology.get(slice_id, None)
+            if s is not None:
+                s.add_virt_node(vnode)
+                self._transport_topology.set_virtual_node(vnode["transport_device_id"],
+                                                          vnode["virtual_device_id"])
+                self.log.info("new virtual switch {i} was added".format(i=vnode["virtual_device_id"]))
+
+                return False, None
+            else:
+                msg = "the virtual switch was not found"
+                self.log.error(msg)
+                return True, msg
+        except Exception as ex:
+            return True, ex
+
+    @wamp.register(uri="{i}.rem_virt_node")
+    def rem_virt_node(self, slice_id, vnode_id):
+        try:
+            s = self._virtual_topology.get(slice_id, None)
+            if s is not None:
+                s.rem_virt_node(vnode_id)
+                self._transport_topology.del_virtual_node()
