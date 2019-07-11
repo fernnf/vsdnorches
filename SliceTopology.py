@@ -2,6 +2,7 @@ from autobahn.twisted.wamp import ApplicationSession
 from autobahn import wamp
 import networkx as nx
 import networkx.readwrite as nxparser
+from uuid import uuid4
 
 from SliceModels import TransportSwitch, TransportLink, TransportInterface
 from SliceModels import VirtualInterface, VirtualSwitch, VirtualLink
@@ -12,79 +13,99 @@ PREFIX = "vsdnorches.topologyservice"
 # TODO: Create injection from dictionary to model class
 
 class TransportTopologyController(object):
-    def __init__(self, label=None):
-        self._transport_topology = nx.Graph(type="transport_network", label=label, tenant_id="0")
+    def __init__(self, type="physical_network", label=None):
+        self._phy_top = nx.Graph(type=type, label=label)
+        self._virt_nodes = {}
+
+    def _find_node(self, id):
+        nodes = list(self._phy_top.nodes(data=True))
+        for n in nodes:
+            return n if n[0].get(id, None) is not None
+
+    def _find_link(self, id):
+        links = list(self._phy_top.edges(data=True))
+        for l in links:
+            if l[2].get(id, None) is not None:
+                return l
+        return None
+
+    def _find_virt_nodes(self, id):
+        node = self.get_node(id)
+        return node if node is None else node[1].get("virt_nodes")
+
+    def get_type(self):
+        return self._phy_top.graph.get("type", None)
+
+    def get_label(self):
+        return self._phy_top.graph.get("label", None)
+
+    def get_node(self, device_id):
+        if self._phy_top.has_node(device_id):
+            return self._find_node(device_id)
+        else:
+            return None
+
+    def get_nodes(self):
+        return list(self._phy_top.nodes(data=True))
+
+    def get_link(self, link_id):
+        link = self._find_link(link_id)
+        if link is not None:
+            return link
+        else:
+            raise ValueError("the link {i} was not found".format(i=link_id))
+
+    def get_links(self):
+        return list(self._phy_top.edges(data=True))
+
+    def get_topology(self):
+        return nxparser.node_link_data(self._phy_top)
+
+    def get_virt_nodes(self, ):
+
+    def set_label(self, label):
+        self._phy_top.graph.update({"label": label})
+
+    def set_node(self, datapath_id, prefix_uri, label=None):
+        device_id = str(uuid4())
+        self._phy_top.add_node(device_id,
+                               datapath_id=datapath_id,
+                               prefix_uri=prefix_uri,
+                               virt_nodes={},
+                               label=label)
+        return device_id
+
+    def set_link(self, source_id, target_id, source_portnum, target_portnum, tunnel=None, key=None):
+        link_id = str(uuid4())
+        self._phy_top.add_edge(source_id, target_id,
+                               link_id=link_id,
+                               ingress=source_portnum,
+                               egress=target_portnum,
+                               tunnel=tunnel,
+                               key=key)
+        return link_id
+
+    def del_node(self, device_id):
+        if self._phy_top.has_node(device_id):
+            self._phy_top.remove_node(device_id)
+        else:
+            raise ValueError("the node {i} was not found".format(i=id))
+
+    def del_link(self, link_id):
+        link = self._find_link(link_id)
+
+        if link is not None:
+            source = link[0]
+            target = link[1]
+            self._phy_top.remove_edge(source,target)
+        else:
+            raise ValueError("the link {i} was not found".format(i=link_id))
 
     @classmethod
     def from_json(cls, j):
         obj = cls()
         obj._transport_topology = nxparser.node_link_graph(j)
         return obj
-
-    def add_node(self, node):
-        n = TransportSwitch.parser(node)
-        self._transport_topology.add_node(n.get_id(), properties=n.serialize(), interfaces={}, virtual_nodes=[])
-
-    def rem_node(self, device_id):
-        assert self._transport_topology.has_node(device_id), "the source node was not found"
-        self._transport_topology.remove_node(device_id)
-
-    def add_link(self, link):
-        l = TransportLink.parser(link)
-        src_device_id = l.get_ingress()["device_id"]
-        dst_device_id = l.get_egress()["device_id"]
-
-        assert self._transport_topology.has_node(src_device_id), "the source node was not found"
-        assert self._transport_topology.has_node(dst_device_id), "the destination node was not found"
-
-        self._transport_topology.add_edge(src_device_id, dst_device_id, properties=link, statistics=[])
-
-    def rem_link(self, src_device_id, dst_device_id):
-        assert self._transport_topology.has_edge(src_device_id, dst_device_id), "the link was not found"
-        self._transport_topology.remove_edge(src_device_id, dst_device_id)
-
-    def set_interface(self, interface):
-        i = TransportInterface.parser(interface)
-        assert self._transport_topology.has_node(i.get_device_id()), "the node was not found"
-        ret = self._transport_topology[i.get_device_id()]["interfaces"].get(i.get_portnum(), None)
-        if ret is None:
-            self._transport_topology[i.get_device_id()]["interfaces"].update({i.get_portnum(): i})
-        else:
-            raise ValueError("the interface already was included")
-
-    def del_interface(self, device_id, portnum):
-        assert self._transport_topology.has_node(device_id()), "the node was not found"
-
-        ret = self._transport_topology[device_id()]["interfaces"].get(portnum, None)
-
-        if ret is not None:
-            self._transport_topology[device_id()]["interfaces"].pop(portnum)
-        else:
-            raise ValueError("the interface not found on device {d}".format(d=device_id))
-
-    def set_virtual_node(self, device_id, virt_device_id):
-        self._transport_topology.nodes[device_id]["virtual_nodes"].append(virt_device_id)
-
-    def del_virtual_node(self, device_id, virt_device_id):
-        self._transport_topology.nodes[device_id]["virtual_nodes"].pop(virt_device_id)
-
-    def get_count_virtual_node(self, transport_device_id):
-        return len(self._transport_topology.nodes[transport_device_id]["virtual_nodes"])
-
-    def get_count_nodes(self):
-        return self._transport_topology.number_of_nodes()
-
-    def get_count_links(self):
-        return self._transport_topology.number_of_edges()
-
-    def get_link(self, link_id):
-        links = list(self._transport_topology.edges(data=True))
-        for link in links:
-            lid = link[2]["properties"]["link_id"]
-            if lid.__eq__(link_id):
-                return False, (link[0], link[1])
-
-        return True, "the link was not found"
 
     def to_json(self):
         j = nxparser.node_link_data(self._transport_topology)
@@ -153,7 +174,10 @@ class SliceTopologyController(object):
         return self._slice_topology.number_of_edges()
 
     def get_nodes(self):
-        return self._slice_topology.nodes
+        return list(self._slice_topology.nodes(data=True))
+
+    def get_node(self, vnode_id):
+        return
 
     def to_json(self):
         j = nxparser.node_link_data(self._slice_topology)
@@ -218,7 +242,7 @@ class TopologyService(ApplicationSession):
         try:
             self._virtual_topology.update({s.get_slice_id(): s})
             self.log.info("new slice {i} was created".format(i=s.get_slice_id()))
-            return False, s.get_slice_id()
+            return False, None
         except Exception as ex:
             return True, ex
 
@@ -246,4 +270,6 @@ class TopologyService(ApplicationSession):
             s = self._virtual_topology.get(slice_id, None)
             if s is not None:
                 s.rem_virt_node(vnode_id)
-                self._transport_topology.del_virtual_node()
+                for n in s.get_nodes():
+
+                    self._transport_topology.del_virtual_node()
