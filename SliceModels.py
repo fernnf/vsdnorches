@@ -44,13 +44,12 @@ class VirtualSwitch(object):
     """
         vswitch = {
             "type": "virtual_switch"
-            "virtual_device_id": string,
-            "transport_device_id": string
+            "id": string,
+            "physical_id": string
             "tenant_id": string,
             "label": string,
             "datapath_id": string
             "protocols": list
-            "interfaces": { "string"}
         }
     """
 

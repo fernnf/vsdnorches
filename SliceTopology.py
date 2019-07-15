@@ -8,7 +8,7 @@ from SliceModels import TransportSwitch, TransportLink, TransportInterface
 from SliceModels import VirtualInterface, VirtualSwitch, VirtualLink
 
 PREFIX = "vsdnorches.topologyservice"
-
+s
 
 # TODO: Create injection from dictionary to model class
 
@@ -29,7 +29,7 @@ class TransportTopologyController(object):
     def _find_link(self, id):
         links = list(self._phy_top.edges(data=True))
         for l in links:
-            n1, n2 , property = l
+            n1, n2, property = l
             lid = property["link_id"]
             if lid.__eq__(id):
                 return l
@@ -37,7 +37,7 @@ class TransportTopologyController(object):
 
     def _find_virt_nodes(self, id):
         node = self.get_node(id)
-        _ , property = node
+        _, property = node
         return property.get("virt_nodes", None)
 
     def get_type(self):
@@ -97,7 +97,7 @@ class TransportTopologyController(object):
         if link is not None:
             source = link[0]
             target = link[1]
-            self._phy_top.remove_edge(source,target)
+            self._phy_top.remove_edge(source, target)
         else:
             raise ValueError("the link {i} was not found".format(i=link_id))
 
@@ -130,7 +130,8 @@ class SliceTopologyController(object):
                                    status="CREATED",
                                    type=type,
                                    label=label,
-                                   controller=controller)
+                                   controller=controller,
+                                   interfaces=[])
 
     def get_slice_id(self):
         return self._slice_top.graph["slice_id"]
@@ -140,10 +141,10 @@ class SliceTopologyController(object):
 
     def set_slice_status(self, code):
         status_code = {
-            0 : "CREATED",
-            1 : "DEPLOYED",
-            2 : "RUNNING",
-            3 : "STOPPED"
+            0: "CREATED",
+            1: "DEPLOYED",
+            2: "RUNNING",
+            3: "STOPPED"
         }
 
         ret = status_code.get(code, None)
@@ -152,9 +153,63 @@ class SliceTopologyController(object):
         else:
             raise ValueError("the status code {i} is unknown".format(i=code))
 
+    def get_slice_tenant_id(self):
+        return self._slice_top.graph["tenant_id"]
 
+    def set_slice_tenant_id(self, tenant_id):
+        self._slice_top.graph["tenant_id"] = tenant_id
 
+    def get_slice_label(self):
+        return self._slice_top.graph["label"]
 
+    def set_slice_label(self, label):
+        self._slice_top.graph["label"] = label
+
+    def get_slice_controller(self):
+        return self._slice_top.graph["controller"]
+
+    def set_slice_controller(self, controller):
+        self._slice_top.graph["controller"] = controller
+
+    def set_slice_node(self, physical_id, datapath_id=None, type="virtual_switch", label=None, protocols=None):
+        device_id = str(uuid4())
+        tenant_id = self.get_slice_tenant_id()
+
+        if datapath_id is None:
+            datapath_id = str(uuid4())[:16]
+
+        self._slice_top.add_node(device_id,
+                                 physical_id=physical_id,
+                                 tenant_id=tenant_id,
+                                 datapath_id=datapath_id,
+                                 type=type,
+                                 label=label,
+                                 protocols=protocols)
+
+        return device_id
+
+    def get_slice_node(self, device_id):
+        if not self._slice_top.has_node(device_id):
+            raise ValueError("the node {i} was not found".format(i=device_id))
+
+        nodes = list(self._slice_top.nodes(data=True))
+        for n in nodes:
+            id, _ = n
+            if id == device_id:
+                return n
+
+        return None
+
+    def del_slice_node(self, device_id):
+        if not self._slice_top.has_node(device_id):
+            raise ValueError("the node {i} was not found".format(i=device_id))
+
+        self._slice_top.remove_node(device_id)
+
+    def get_slice_count_node(self):
+        return self._slice_top.number_of_nodes()
+
+    def set_slice_link(self, src_device_id, dst_device_id, type="virtual_link", tunnel="vlan", key=None ):
 
 
 """
@@ -229,6 +284,7 @@ class SliceTopologyController(object):
         j = nxparser.node_link_data(self._slice_topology)
         return j
 """
+
 
 class TopologyService(ApplicationSession):
 
@@ -309,6 +365,7 @@ class TopologyService(ApplicationSession):
                 return True, msg
         except Exception as ex:
             return True, ex
+
     """
     @wamp.register(uri="{i}.rem_virt_node")
     def rem_virt_node(self, slice_id, vnode_id):
