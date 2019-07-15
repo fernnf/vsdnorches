@@ -15,23 +15,30 @@ PREFIX = "vsdnorches.topologyservice"
 class TransportTopologyController(object):
     def __init__(self, type="physical_network", label=None):
         self._phy_top = nx.Graph(type=type, label=label)
-        self._virt_nodes = {}
 
     def _find_node(self, id):
         nodes = list(self._phy_top.nodes(data=True))
-        for n in nodes:
-            return n if n[0].get(id, None) is not None
+        if len(nodes) > 0:
+            for n in nodes:
+                did, _ = n
+                if did == id:
+                    return n
+        else:
+            return None
 
     def _find_link(self, id):
         links = list(self._phy_top.edges(data=True))
         for l in links:
-            if l[2].get(id, None) is not None:
+            n1, n2 , property = l
+            lid = property["link_id"]
+            if lid.__eq__(id):
                 return l
         return None
 
     def _find_virt_nodes(self, id):
         node = self.get_node(id)
-        return node if node is None else node[1].get("virt_nodes")
+        _ , property = node
+        return property.get("virt_nodes", None)
 
     def get_type(self):
         return self._phy_top.graph.get("type", None)
@@ -39,14 +46,33 @@ class TransportTopologyController(object):
     def get_label(self):
         return self._phy_top.graph.get("label", None)
 
-    def get_node(self, device_id):
-        if self._phy_top.has_node(device_id):
-            return self._find_node(device_id)
-        else:
-            return None
+    def set_label(self, label):
+        self._phy_top.graph.update({"label": label})
 
     def get_nodes(self):
         return list(self._phy_top.nodes(data=True))
+
+    def get_node(self, device_id):
+        assert self._phy_top.has_node(device_id), "the node was not found"
+        return self._find_node(device_id)
+
+    def set_node(self, datapath_id, prefix_uri, label=None):
+        device_id = str(uuid4())
+        self._phy_top.add_node(device_id,
+                               datapath_id=datapath_id,
+                               prefix_uri=prefix_uri,
+                               virt_nodes=[],
+                               label=label)
+        return device_id
+
+    def del_node(self, device_id):
+        if self._phy_top.has_node(device_id):
+            self._phy_top.remove_node(device_id)
+        else:
+            raise ValueError("the node {i} was not found".format(i=id))
+
+    def get_links(self):
+        return list(self._phy_top.edges(data=True))
 
     def get_link(self, link_id):
         link = self._find_link(link_id)
@@ -54,26 +80,6 @@ class TransportTopologyController(object):
             return link
         else:
             raise ValueError("the link {i} was not found".format(i=link_id))
-
-    def get_links(self):
-        return list(self._phy_top.edges(data=True))
-
-    def get_topology(self):
-        return nxparser.node_link_data(self._phy_top)
-
-    def get_virt_nodes(self, ):
-
-    def set_label(self, label):
-        self._phy_top.graph.update({"label": label})
-
-    def set_node(self, datapath_id, prefix_uri, label=None):
-        device_id = str(uuid4())
-        self._phy_top.add_node(device_id,
-                               datapath_id=datapath_id,
-                               prefix_uri=prefix_uri,
-                               virt_nodes={},
-                               label=label)
-        return device_id
 
     def set_link(self, source_id, target_id, source_portnum, target_portnum, tunnel=None, key=None):
         link_id = str(uuid4())
@@ -85,12 +91,6 @@ class TransportTopologyController(object):
                                key=key)
         return link_id
 
-    def del_node(self, device_id):
-        if self._phy_top.has_node(device_id):
-            self._phy_top.remove_node(device_id)
-        else:
-            raise ValueError("the node {i} was not found".format(i=id))
-
     def del_link(self, link_id):
         link = self._find_link(link_id)
 
@@ -101,17 +101,63 @@ class TransportTopologyController(object):
         else:
             raise ValueError("the link {i} was not found".format(i=link_id))
 
-    @classmethod
-    def from_json(cls, j):
-        obj = cls()
-        obj._transport_topology = nxparser.node_link_graph(j)
-        return obj
+    def get_virt_nodes(self, device_id):
+        return self._find_virt_nodes(device_id)
 
-    def to_json(self):
-        j = nxparser.node_link_data(self._transport_topology)
-        return j
+    def set_virt_node(self, device_id, virtdev_id):
+        node = self.get_node(device_id)
+        node[1]["virt_nodes"].append(virtdev_id)
+
+    def del_virt_node(self, device_id, virtdev_id):
+        node = self.get_node(device_id)
+        node[1]["virt_nodes"].remove(virtdev_id)
+
+    def len_virt_nodes(self, device_id):
+        return len(self.get_virt_nodes(device_id))
+
+    def get_topology(self):
+        return nxparser.node_link_data(self._phy_top)
+
+    @staticmethod
+    def from_json(json):
+        return nxparser.node_link_graph(json)
 
 
+class SliceTopologyController(object):
+    def __init__(self, tenant_id, type="virtual_network", label=None, controller=""):
+        self._slice_top = nx.Graph(tenant_id=tenant_id,
+                                   slice_id=str(uuid4()),
+                                   status="CREATED",
+                                   type=type,
+                                   label=label,
+                                   controller=controller)
+
+    def get_slice_id(self):
+        return self._slice_top.graph["slice_id"]
+
+    def get_slice_status(self):
+        return self._slice_top.graph["status"]
+
+    def set_slice_status(self, code):
+        status_code = {
+            0 : "CREATED",
+            1 : "DEPLOYED",
+            2 : "RUNNING",
+            3 : "STOPPED"
+        }
+
+        ret = status_code.get(code, None)
+        if ret is not None:
+            self._slice_top.graph["status"] = ret
+        else:
+            raise ValueError("the status code {i} is unknown".format(i=code))
+
+
+
+
+
+
+"""
 class SliceTopologyController(object):
 
     def __init__(self, slice=None):
@@ -182,7 +228,7 @@ class SliceTopologyController(object):
     def to_json(self):
         j = nxparser.node_link_data(self._slice_topology)
         return j
-
+"""
 
 class TopologyService(ApplicationSession):
 
@@ -194,7 +240,7 @@ class TopologyService(ApplicationSession):
     def onJoin(self, details):
         self.log.info("Starting Topology Service...")
 
-    @wamp.register(uri="{p}.add_phy_node")
+    @wamp.register(uri="{p}.add_phy_node".format(p=PREFIX))
     def add_phy_node(self, node):
         try:
             self._transport_topology.add_node(node)
@@ -203,7 +249,7 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{p}.rem_phy_node")
+    @wamp.register(uri="{p}.rem_phy_node".format(p=PREFIX))
     def rem_phy_node(self, device_id):
 
         try:
@@ -213,7 +259,7 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{i}.add_phy_link")
+    @wamp.register(uri="{p}.add_phy_link".format(p=PREFIX))
     def add_phy_link(self, link):
         try:
             self._transport_topology.add_link(link)
@@ -222,7 +268,7 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{i}.rem_phy_link")
+    @wamp.register(uri="{p}.rem_phy_link".format(p=PREFIX))
     def rem_phy_link(self, link_id):
         try:
             error, d = self._transport_topology.get_link(link_id)
@@ -235,7 +281,7 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{i}.create_slice")
+    @wamp.register(uri="{p}.create_slice".format(p=PREFIX))
     def create_slice(self, slice):
         s = SliceTopologyController(slice=slice)
 
@@ -246,7 +292,7 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{i}.add_virt_node")
+    @wamp.register(uri="{p}.add_virt_node".format(p=PREFIX))
     def add_virt_node(self, slice_id, vnode):
         try:
             s = self._virtual_topology.get(slice_id, None)
@@ -263,7 +309,7 @@ class TopologyService(ApplicationSession):
                 return True, msg
         except Exception as ex:
             return True, ex
-
+    """
     @wamp.register(uri="{i}.rem_virt_node")
     def rem_virt_node(self, slice_id, vnode_id):
         try:
@@ -273,3 +319,4 @@ class TopologyService(ApplicationSession):
                 for n in s.get_nodes():
 
                     self._transport_topology.del_virtual_node()
+    """
