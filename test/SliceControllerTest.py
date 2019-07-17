@@ -77,3 +77,23 @@ class SliceControllerTest(unittest.TestCase):
         pprint.pprint(node)
 
         self.st.del_slice_node(virtual_id)
+
+    def test_set_slice_interface(self):
+        import uuid
+        physical_id=str(uuid.uuid4())
+        virtual_id = self.st.set_slice_node(physical_id)
+        self.assertIsNotNone(virtual_id)
+        print(self.st.get_slice_count_interface(virtual_id))
+        self.st.set_slice_interface(virtual_id, "1", "5", key = "1")
+        print(self.st.get_slice_count_interface(virtual_id))
+
+    def test_get_slice_interface(self):
+        import uuid
+        physical_id=str(uuid.uuid4())
+        virtual_id = self.st.set_slice_node(physical_id)
+        self.assertIsNotNone(virtual_id)
+        print(self.st.get_slice_count_interface(virtual_id))
+        self.st.set_slice_interface(virtual_id, "1", "5", key = "1")
+        print(self.st.get_slice_count_interface(virtual_id))
+
+        self.st

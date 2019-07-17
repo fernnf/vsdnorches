@@ -8,7 +8,7 @@ from SliceModels import TransportSwitch, TransportLink, TransportInterface
 from SliceModels import VirtualInterface, VirtualSwitch, VirtualLink
 
 PREFIX = "vsdnorches.topologyservice"
-s
+
 
 # TODO: Create injection from dictionary to model class
 
@@ -130,8 +130,7 @@ class SliceTopologyController(object):
                                    status="CREATED",
                                    type=type,
                                    label=label,
-                                   controller=controller,
-                                   interfaces=[])
+                                   controller=controller)
 
     def get_slice_id(self):
         return self._slice_top.graph["slice_id"]
@@ -172,6 +171,7 @@ class SliceTopologyController(object):
         self._slice_top.graph["controller"] = controller
 
     def set_slice_node(self, physical_id, datapath_id=None, type="virtual_switch", label=None, protocols=None):
+
         device_id = str(uuid4())
         tenant_id = self.get_slice_tenant_id()
 
@@ -189,10 +189,9 @@ class SliceTopologyController(object):
         return device_id
 
     def get_slice_node(self, device_id):
-        if not self._slice_top.has_node(device_id):
-            raise ValueError("the node {i} was not found".format(i=device_id))
+        assert self._slice_top.has_node(device_id), "the node {i} was not found".format(i=device_id)
 
-        nodes = list(self._slice_top.nodes(data=True))
+        nodes = self._slice_top.nodes(data=True)
         for n in nodes:
             id, _ = n
             if id == device_id:
@@ -201,89 +200,46 @@ class SliceTopologyController(object):
         return None
 
     def del_slice_node(self, device_id):
-        if not self._slice_top.has_node(device_id):
-            raise ValueError("the node {i} was not found".format(i=device_id))
-
+        assert self._slice_top.has_node(device_id), "the node {i} was not found".format(i=device_id)
         self._slice_top.remove_node(device_id)
 
     def get_slice_count_node(self):
         return self._slice_top.number_of_nodes()
 
-    def set_slice_link(self, src_device_id, dst_device_id, type="virtual_link", tunnel="vlan", key=None ):
+    def set_slice_link(self, src_device_id, dst_device_id, type="virtual_link", tunnel="vlan", key=None):
+        assert self._slice_top.has_node(src_device_id), "the node {i} was not found".format(i=src_device_id)
+        assert self._slice_top.has_node(dst_device_id), "the node {i} was not found".format(i=dst_device_id)
 
+        link_id = str(uuid4())
 
-"""
-class SliceTopologyController(object):
+        self._slice_top.add_edge(src_device_id,
+                                 dst_device_id,
+                                 link_id=link_id,
+                                 type=type,
+                                 tunnel=tunnel,
+                                 key=key)
 
-    def __init__(self, slice=None):
-        self._slice_topology = nx.Graph(properties=slice)
+        return link_id
 
-    @classmethod
-    def from_json(cls, j):
-        obj = cls()
-        obj._slice_topology = nxparser.node_link_graph(j)
-        return obj
+    def get_slice_link(self, link_id):
+        links = self._slice_top.edges(data = True)
 
-    def set_proper_slice(self, slice):
-        self._slice_topology.graph.update({"properties": slice})
+        for l in links:
+            if l[2]["link_id"] == link_id:
+                return l
 
-    def get_slice_id(self):
-        return self._slice_topology.graph["properties"].get("slice_id", None)
+        return None
 
-    def add_virt_node(self, node):
-        vn = VirtualSwitch.parser(node)
-        assert self._slice_topology.has_node(vn.get_id()), "the node already was included"
-        self._slice_topology.add_node(vn.get_id(), properties=node, interfaces={}, statistics={})
+    def del_slice_link(self, link_id):
+        links = self._slice_top.edges(data = True)
+        for l in links:
+            if l[2]["link_id"] == link_id:
+                source = l[0]
+                target = l[1]
+                self._slice_top.remove_edge(source, target)
+                return True
 
-    def rem_virt_node(self, device_id):
-        assert self._slice_topology.has_node(device_id), "the node was not found"
-        self._slice_topology.remove_node(device_id)
-
-    def add_link(self, link):
-        vl = VirtualLink.parser(link)
-        src_device_id = vl.get_ingress()["device_id"]
-        dst_device_id = vl.get_egress()["device_id"]
-
-        assert self._slice_topology.has_node(src_device_id), "the node was not found"
-        assert self._slice_topology.has_node(dst_device_id), "the node was not found"
-
-        self._slice_topology.add_edge(src_device_id, dst_device_id, properties=link, statistics={})
-
-    def rem_link(self, src_device_id, dst_device_id):
-        assert self._slice_topology.has_edge(src_device_id, dst_device_id), "the link was not found"
-        self._slice_topology.remove_edge(src_device_id, dst_device_id)
-
-    def set_interface(self, device_id, interface):
-        i = VirtualInterface.parser(interface)
-        ret = self._slice_topology[device_id]["interfaces"].get(i.get_virt_portnum(), None)
-        if ret is None:
-            self._slice_topology[device_id]["interfaces"].update({i.get_virt_portnum(): interface})
-        else:
-            raise ValueError("the virtual interface already was included to node")
-
-    def del_interface(self, device_id, portnum):
-        ret = self._slice_topology[device_id]["interfaces"].get(portnum, None)
-        if ret is not None:
-            self._slice_topology[device_id]["interfaces"].pop(portnum)
-        else:
-            raise ValueError("the interface was not found")
-
-    def get_count_nodes(self):
-        return self._slice_topology.number_of_nodes()
-
-    def get_count_links(self):
-        return self._slice_topology.number_of_edges()
-
-    def get_nodes(self):
-        return list(self._slice_topology.nodes(data=True))
-
-    def get_node(self, vnode_id):
-        return
-
-    def to_json(self):
-        j = nxparser.node_link_data(self._slice_topology)
-        return j
-"""
+        return None
 
 
 class TopologyService(ApplicationSession):
@@ -291,31 +247,31 @@ class TopologyService(ApplicationSession):
     def __init__(self, *args, **kwargs):
         super(TopologyService, self).__init__(*args, **kwargs)
         self._transport_topology = TransportTopologyController(label="Transport")
-        self._virtual_topology = {}
+        self._virtual_topology = []
 
     def onJoin(self, details):
         self.log.info("Starting Topology Service...")
 
-    @wamp.register(uri="{p}.add_phy_node".format(p=PREFIX))
-    def add_phy_node(self, node):
+    @wamp.register(uri="{p}.set_phy_node".format(p=PREFIX))
+    def set_phy_node(self, datapath_id, prefix_uri, label):
         try:
-            self._transport_topology.add_node(node)
-            self.log.info("new transport device {i} has added".format(i=node["device_id"]))
-            return False, None
+            device_id = self._transport_topology.set_node(datapath_id, prefix_uri, label)
+            self.log.info("new transport device {i} has added".format(i=device_id))
+            return False, device_id
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{p}.rem_phy_node".format(p=PREFIX))
-    def rem_phy_node(self, device_id):
+    @wamp.register(uri="{p}.del_phy_node".format(p=PREFIX))
+    def del_phy_node(self, device_id):
 
         try:
-            self._transport_topology.rem_node(device_id)
+            self._transport_topology.del_node(device_id)
             self.log.info("the transport device {i} was remove".format(i=device_id))
             return False, None
         except Exception as ex:
             return True, ex
 
-    @wamp.register(uri="{p}.add_phy_link".format(p=PREFIX))
+    @wamp.register(uri="{p}.set_phy_link".format(p=PREFIX))
     def add_phy_link(self, link):
         try:
             self._transport_topology.add_link(link)
