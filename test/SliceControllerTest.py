@@ -1,10 +1,11 @@
 import unittest
-from SliceTopology import SliceTopologyController
+from SliceTopology import SliceTopologyDao
+
 
 class SliceControllerTest(unittest.TestCase):
 
     def setUp(self):
-        self.st = SliceTopologyController(tenant_id = "1", label = "slice home", controller = "tcp:127.0.0.1:6654")
+        self.st = SliceTopologyDao(tenant_id="1", label="slice home", controller="tcp:127.0.0.1:6654")
 
     def tearDown(self) -> None:
         self.st = None
@@ -50,7 +51,7 @@ class SliceControllerTest(unittest.TestCase):
 
     def test_set_slice_node(self):
         import uuid
-        physical_id=str(uuid.uuid4())
+        physical_id = str(uuid.uuid4())
         virtual_id = self.st.set_slice_node(physical_id)
         self.assertIsNotNone(virtual_id)
         print(virtual_id)
@@ -78,22 +79,50 @@ class SliceControllerTest(unittest.TestCase):
 
         self.st.del_slice_node(virtual_id)
 
-    def test_set_slice_interface(self):
+    def test_set_slice_link(self):
         import uuid
-        physical_id=str(uuid.uuid4())
-        virtual_id = self.st.set_slice_node(physical_id)
-        self.assertIsNotNone(virtual_id)
-        print(self.st.get_slice_count_interface(virtual_id))
-        self.st.set_slice_interface(virtual_id, "1", "5", key = "1")
-        print(self.st.get_slice_count_interface(virtual_id))
+        dev1_id = str(uuid.uuid4())
+        dev2_id = str(uuid.uuid4())
 
-    def test_get_slice_interface(self):
+        virt1_id = self.st.set_slice_node(dev1_id)
+        virt2_id = self.st.set_slice_node(dev2_id)
+
+        link_id = self.st.set_slice_link(virt1_id, virt2_id, key="2")
+
+        self.assertIsNotNone(link_id)
+
+        print(link_id)
+
+    def test_get_slice_link(self):
         import uuid
-        physical_id=str(uuid.uuid4())
-        virtual_id = self.st.set_slice_node(physical_id)
-        self.assertIsNotNone(virtual_id)
-        print(self.st.get_slice_count_interface(virtual_id))
-        self.st.set_slice_interface(virtual_id, "1", "5", key = "1")
-        print(self.st.get_slice_count_interface(virtual_id))
+        dev1_id = str(uuid.uuid4())
+        dev2_id = str(uuid.uuid4())
 
-        self.st
+        virt1_id = self.st.set_slice_node(dev1_id)
+        virt2_id = self.st.set_slice_node(dev2_id)
+
+        link_id = self.st.set_slice_link(virt1_id, virt2_id, key="2")
+
+        self.assertIsNotNone(link_id)
+        link = self.st.get_slice_link(link_id)
+        self.assertIsNotNone(link)
+        print("link info: {l}".format(l=link))
+
+    def test_del_slice_link(self):
+        import uuid
+        dev1_id = str(uuid.uuid4())
+        dev2_id = str(uuid.uuid4())
+
+        virt1_id = self.st.set_slice_node(dev1_id)
+        virt2_id = self.st.set_slice_node(dev2_id)
+
+        link_id = self.st.set_slice_link(virt1_id, virt2_id, key="2")
+
+        self.assertIsNotNone(link_id)
+        link = self.st.get_slice_link(link_id)
+        self.assertIsNotNone(link)
+        print("link info: {l}".format(l=link))
+        self.st.del_slice_link(link_id)
+        link1 = self.st.get_slice_link(link_id)
+        self.assertIsNone(link1)
+        print("link info: {l}".format(l=link1))

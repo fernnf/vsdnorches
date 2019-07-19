@@ -1,12 +1,12 @@
 import unittest
-from SliceTopology import TransportTopologyController
+from SliceTopology import TopologyDAO
 import uuid
 
 
 class TransportControllerTest(unittest.TestCase):
 
     def setUp(self):
-        self.tt = TransportTopologyController(label = "transport")
+        self.tt = TopologyDAO(label ="transport")
 
         self.nid1 = self.tt.set_node(datapath_id = "0123456789abcdef",
                                      label = "MX",

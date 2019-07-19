@@ -7,20 +7,13 @@
     {
       "type": "router",
       "options": {
-        "pythonpath": [
-          ".."
-        ]
+        "pythonpath": [".."]
       },
       "components": [
         {
           "type": "class",
           "realm": "realm1",
-          "classname": "SliceManager.SliceManager"
-        },
-        {
-          "type": "class",
-          "realm": "realm1",
-          "classname": "SliceBuilder.SliceBuilder"
+          "classname": "SliceTopology.TopologyService"
         }
       ],
       "realms": [

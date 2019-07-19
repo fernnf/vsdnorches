@@ -1,162 +1,217 @@
-from uuid import uuid4 as rnd_id
+from uuid import uuid4
+import networkx as nx
+import networkx.readwrite as nxparser
+
 from autobahn.twisted.wamp import ApplicationSession
 from autobahn import wamp
 
-from SliceModels import NetworkSlice
-from SliceModels import VirtualPort, VirtualLink, VirtualSwitch
-from SliceModels import TransportSwitch, TransportPort, TransportLinks
-
 from twisted.internet.defer import inlineCallbacks
 
-PREFIX = "vsdnorches.slicemanager"
+
+class SliceTopologyDAO(object):
+    def __init__(self, tenant_id, type="virtual_network", label=None, controller=""):
+        self._slice_top = nx.Graph(tenant_id=tenant_id,
+                                   slice_id=str(uuid4()),
+                                   status="CREATED",
+                                   type=type,
+                                   label=label,
+                                   controller=controller)
+
+    def get_slice(self):
+        return nxparser.node_link_data(self._slice_top)
+
+    def get_slice_id(self):
+        return self._slice_top.graph["slice_id"]
+
+    def get_slice_status(self):
+        return self._slice_top.graph["status"]
+
+    def set_slice_status(self, code):
+        status_code = {
+            0: "CREATED",
+            1: "DEPLOY",
+            2: "WITHDRAW",
+            3: "RUN",
+            4: "STOP"
+        }
+
+        ret = status_code.get(code, None)
+        if ret is not None:
+            self._slice_top.graph["status"] = ret
+        else:
+            raise ValueError("the status code {i} is unknown".format(i=code))
+
+    def get_slice_tenant_id(self):
+        return self._slice_top.graph["tenant_id"]
+
+    def set_slice_tenant_id(self, tenant_id):
+        self._slice_top.graph["tenant_id"] = tenant_id
+
+    def get_slice_label(self):
+        return self._slice_top.graph["label"]
+
+    def set_slice_label(self, label):
+        self._slice_top.graph["label"] = label
+
+    def get_slice_controller(self):
+        return self._slice_top.graph["controller"]
+
+    def set_slice_controller(self, controller):
+        self._slice_top.graph["controller"] = controller
+
+    def set_slice_node(self, physical_id, datapath_id=None, type="virtual_switch", label=None, protocols=None):
+
+        device_id = str(uuid4())
+        tenant_id = self.get_slice_tenant_id()
+
+        if datapath_id is None:
+            datapath_id = str(uuid4())[:16]
+
+        self._slice_top.add_node(device_id,
+                                 physical_id=physical_id,
+                                 tenant_id=tenant_id,
+                                 datapath_id=datapath_id,
+                                 type=type,
+                                 label=label,
+                                 protocols=protocols)
+
+        return device_id
+
+    def get_slice_node(self, device_id):
+        assert self._slice_top.has_node(device_id), "the node {i} was not found".format(i=device_id)
+
+        nodes = self._slice_top.nodes(data=True)
+        for n in nodes:
+            id, _ = n
+            if id == device_id:
+                return n
+
+        return None
+
+    def del_slice_node(self, device_id):
+        assert self._slice_top.has_node(device_id), "the node {i} was not found".format(i=device_id)
+        self._slice_top.remove_node(device_id)
+
+    def get_slice_count_node(self):
+        return self._slice_top.number_of_nodes()
+
+    def set_slice_link(self, src_device_id, dst_device_id, type="virtual_link", tunnel="vlan", key=None):
+        assert self._slice_top.has_node(src_device_id), "the node {i} was not found".format(i=src_device_id)
+        assert self._slice_top.has_node(dst_device_id), "the node {i} was not found".format(i=dst_device_id)
+
+        link_id = str(uuid4())
+
+        self._slice_top.add_edge(src_device_id,
+                                 dst_device_id,
+                                 link_id=link_id,
+                                 type=type,
+                                 tunnel=tunnel,
+                                 key=key)
+
+        return link_id
+
+    def get_slice_link(self, link_id):
+        links = self._slice_top.edges(data=True)
+
+        for l in links:
+            if l[2]["link_id"] == link_id:
+                return l
+
+        return None
+
+    def del_slice_link(self, link_id):
+        links = self._slice_top.edges(data=True)
+        for l in links:
+            if l[2]["link_id"] == link_id:
+                source = l[0]
+                target = l[1]
+                self._slice_top.remove_edge(source, target)
+                return True
+
+        return None
 
 
 class SliceManager(ApplicationSession):
 
     def __init__(self, *args, **kwargs):
         super(SliceManager, self).__init__(*args, **kwargs)
-        self.__networkslices = {}
+        self._slices = {}
         self.log.info("Starting Slice Manager...")
 
     @inlineCallbacks
-    def _rem_slice_deployed(self, slice_id):
-        mod_rem = "vsdnorches.slicebuilder.remove"
-        error, ret = yield self.call(mod_rem, slice_id)
-        if error:
-            raise ValueError(ret)
-        del (self.__networkslices[slice_id])
-
-    def _rem_slice_created(self, slice_id):
-        del (self.__networkslices[slice_id])
-
-    @inlineCallbacks
-    def get_slice_status(self, slice_id):
-        module_status = "vsdnorches.slicebuilder.get_status"
-        error, ret = yield self.call(module_status, slice_id)
-        if error:
-            self.log.error(ret)
-            return None
-        return ret
-
-    @inlineCallbacks
     def onJoin(self, details):
-        resp = yield self.call("wamp.session.list")
-        print(resp)
+        self.log.info("Slice Manager Starting ...")
+        yield self.register(self)
+        self.log.info("Slice Manager Started...")
 
-    @wamp.register(uri="{p}.create".format(p=PREFIX))
-    def create(self, slice):
-        s = NetworkSlice.parser(slice)
-
-        ret = self.get_slice_status(s.interface_id)
-        if ret is None:
-            self.__networkslices.update({s.interface_id: slice})
-            self.log.info("new slice {i} has created ".format(i=s.interface_id))
-            return s.interface_id
-        else:
-            self.log.info("the slice has been deployed")
-
-    @wamp.register(uri="{p}.delete".format(p=PREFIX))
-    def delete(self, slice_id):
+    @wamp.register(uri="slicemanager.set_slice")
+    def set_slice(self, tenant_id, label, controller):
         try:
-            ret = self.get_slice_status(slice_id)
-            if ret is None:
-                self._rem_slice_created(slice_id)
-                self.log.info("the slice {id} was deleted".format(id=slice_id))
-                return False, None
-            elif ret.__eq__("STOPPED"):
-                self._rem_slice_deployed(slice_id)
-                self.log.info("the slice {id} was deleted and undeployed".format(id=slice_id))
-                return False, None
-            elif ret.__eq__("DEPLOYING"):
-                msg = "Cannot delete slice in deploying"
-                self.log.error(msg)
-                return True, msg
-            elif ret.__eq__("RUNNING"):
-                msg = "Cannot delete slice in running"
-                self.log.error(msg)
-                return True, msg
-            elif ret.__eq__("ERROR"):
-                self._rem_slice_created(slice_id)
-                return False, None
-            else:
-                msg = "cannot delete slice"
-                self.log.info(msg)
-                return True, msg
-
+            slice = SliceTopologyDAO(tenant_id=tenant_id,
+                                     label=label,
+                                     controller=controller)
+            slice_id = slice.get_slice_id()
+            self._slices.update({slice_id: slice})
+            return False, slice_id
         except Exception as ex:
             return True, str(ex)
 
-    @wamp.register(uri="{p}.add_vswitch".format(p=PREFIX))
-    def add_vswitch(self, slice_id, vswitch):
-        vsw = VirtualSwitch.parser(vswitch)
-        slice = self.__networkslices.get(slice_id)
+    @wamp.register(uri="slicemanager.del_slice")
+    def del_slice(self, slice_id):
+        try:
+            slice = self._slices.get(slice_id, None)
+            if slice is not None:
+                status = slice.get_slice_status()
+                if status == "RUN":
+                    return True, "cannot delete a slice in running"
+                elif status == "DEPLOY":
+                    return True, "cannot delete a slice in deploying"
+                elif status == "WITHDRAW":
+                    return True, "cannot delete a slice in withdrawing"
+                elif status == "CREATED":
+                    self._slices.pop(slice.get_slice_id())
+                    return False, None
+                elif status == "STOPPED":
+                    pass
+                    #send a withdraw to slicebuilder
+                else:
+                    pass
+            else:
+                return True, "slice <{i}> was not found".format(i=slice_id)
+        except Exception as ex:
+            return True, str(ex)
 
-        ret = self.get_slice_status(slice_id)
-        if ret is None:
-            slice.add_vswitch(vsw)
-            self.__networkslices.update({slice_id: slice})
-            self.log.info("new virtual switch {i} has created".format(i=vsw.interface_id))
-            return False, None
+    @wamp.register(uri="slicemanager.get_slice")
+    def get_slice(self, slice_id):
+        try:
+            slice = self._slices.get(slice_id, None)
+            if slice is not None:
+                return False, slice.get_slice()
+            else:
+                return True, "slice <{i}> was not found".format(i=slice_id)
+        except Exception as ex:
+            return True, str(ex)
+
+    @wamp.register(uri="slicemanager.get_slices")
+    def get_slices(self):
+        slices = []
+        if self._slices.__len__() > 0:
+            for v in self._slices.values():
+                slices.append(v.get_slice())
+
+            return False, slices
         else:
-            msg = "Cannot add a virtual switch in slice already has deployed"
-            self.log.error(msg)
-            return True, msg
+            return True, "There is no slices"
 
-    @wamp.register(uri="{p}.rem_vswitch".format(p=PREFIX))
-    def rem_vswitch(self, slice_id, vswitch_id):
-        slice = self.__networkslices.get(slice_id)
-        vsw = slice.get_vswitch(vswitch_id)
+    @inlineCallbacks
+    @wamp.register(uri="slicemanager.set_slice_node")
+    def set_slice_node(self, slice_id, device_id, datapath_id, label, protocols):
+        try:
+            err, msg = yield self.call("topologyservice.has_node", device_id)
+            if err:
+                return True, msg
 
-        ret = self.get_slice_status(slice_id)
-        if ret is None:
-            slice.rem_vswitch(vsw.dpid)
-            self.__networkslices.update({slice_id: slice})
-            self.log.info("the virtual switch {i} has removed".format(i=vsw.interface_id))
-            return False, None
-        else:
-            msg = "Cannot remove a virtual switch in slice already has deployed"
-            self.log.error(msg)
-            return True, msg
+            slice = self._slices.get(slice_id, None)
+            if slice is not None:
 
-    @wamp.register(uri="{p}.add_vport".format(p=PREFIX))
-    def add_vport(self, slice_id, vswitch_id, vport):
-        slice = self.__networkslices.get(slice_id)
-        vsw = slice.get_vswitch(vswitch_id)
-        vp = VirtualPort.parser(vport)
-
-        ret = self.get_slice_status(slice_id)
-
-        if ret is None:
-            vsw.set_vport(vp)
-            slice.add_vswitch(vsw)
-            self.__networkslices.update({slice_id: slice})
-            self.log.info()
-            return False, None
-        else:
-            msg = "Cannot add a virtual port in slice already has deployed"
-            self.log.error(msg)
-            return True, msg
-
-    @wamp.register(uri="{p}.rem_vport".format(p=PREFIX))
-    def rem_vport(self, slice_id, vswitch_id, vport_id):
-        slice = self.__networkslices.get(slice_id)
-        vsw = slice.get_vswitch(vswitch_id)
-
-        ret = self.get_slice_status(slice_id)
-        if ret is None:
-            vsw.del_vport(vport_id)
-            slice.add_vswitch(vsw)
-            self.__networkslices.update({slice_id: slice})
-            return False, None
-        else:
-            msg = "Cannot remove a virtual port in slice already has deployed"
-            self.log.error(msg)
-            return True, msg
-
-    @wamp.register(uri="{p}.start_slice".format(p=PREFIX))
-    def start_slice(self):
-        pass
-
-    @wamp.register(uri="{p}.stop_slice".format(p=PREFIX))
-    def stop_slice(self):
-        pass
+        except Exception as ex:
