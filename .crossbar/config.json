@@ -14,6 +14,11 @@
           "type": "class",
           "realm": "realm1",
           "classname": "SliceTopology.TopologyService"
+        },
+        {
+          "type": "class",
+          "realm": "realm1",
+          "classname": "SliceManager.SliceService"
         }
       ],
       "realms": [

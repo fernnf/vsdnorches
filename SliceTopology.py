@@ -129,7 +129,6 @@ class TopologyDAO(object):
     def get_shortest_path(self, source_id, target_id):
         return nx.shortest_path(self._topo, source_id, target_id)
 
-
     def get_topology(self):
         return nxparser.node_link_data(self._topo)
 
@@ -295,55 +294,3 @@ class TopologyService(ApplicationSession):
             return True, str(ex)
 
 
-"""
-    @wamp.register(uri="{p}.set_phy_link".format(p=PREFIX))
-    def set_phy_link(self, link):
-        try:
-            self._phy_topo.add_link(link)
-            self.log.info("new physical link {i} was added".format(i=link["link_id"]))
-            return False, None
-        except Exception as ex:
-            return True, ex
-
-    @wamp.register(uri="{p}.rem_phy_link".format(p=PREFIX))
-    def rem_phy_link(self, link_id):
-        try:
-            error, d = self._phy_topo.get_link(link_id)
-            if not error:
-                self._phy_topo.rem_link(d[0], d[1])
-                self.log.info("the link {i} was remove".format(i=link_id))
-                return False, None
-            else:
-                self.log.error(d)
-        except Exception as ex:
-            return True, ex
-
-    @wamp.register(uri="{p}.create_slice".format(p=PREFIX))
-    def create_slice(self, slice):
-        s = SliceTopologyController(slice=slice)
-
-        try:
-            self._virtual_topology.update({s.get_slice_id(): s})
-            self.log.info("new slice {i} was created".format(i=s.get_slice_id()))
-            return False, None
-        except Exception as ex:
-            return True, ex
-
-    @wamp.register(uri="{p}.add_virt_node".format(p=PREFIX))
-    def add_virt_node(self, slice_id, vnode):
-        try:
-            s = self._virtual_topology.get(slice_id, None)
-            if s is not None:
-                s.add_virt_node(vnode)
-                self._phy_topo.set_virtual_node(vnode["transport_device_id"],
-                                                vnode["virtual_device_id"])
-                self.log.info("new virtual switch {i} was added".format(i=vnode["virtual_device_id"]))
-
-                return False, None
-            else:
-                msg = "the virtual switch was not found"
-                self.log.error(msg)
-                return True, msg
-        except Exception as ex:
-            return True, ex
-"""
