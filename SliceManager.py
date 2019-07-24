@@ -202,6 +202,7 @@ class SliceService(ApplicationSession):
                                      controller=controller)
             slice_id = slice.get_slice_id()
             self._slices.update({slice_id: slice})
+            self.log.info("new slice <{i}> has created ".format(i=slice_id))
             return False, slice_id
         except Exception as ex:
             return True, str(ex)
@@ -220,6 +221,7 @@ class SliceService(ApplicationSession):
                     return True, "cannot delete a slice in withdrawing"
                 elif status == str(SliceStatus.CREATED):
                     self._slices.pop(slice.get_slice_id())
+                    self.log.info("the slice <{i}> has deleted".format(i=slice_id))
                     return False, None
                 elif status == str(SliceStatus.STOP):
                     pass
@@ -228,6 +230,8 @@ class SliceService(ApplicationSession):
                     pass
             else:
                 return True, "slice <{i}> was not found".format(i=slice_id)
+
+
         except Exception as ex:
             return True, str(ex)
 
@@ -246,13 +250,13 @@ class SliceService(ApplicationSession):
     @wamp.register(uri="sliceservice.get_slices")
     def get_slices(self):
         slices = []
-        if self._slices.__len__() > 0:
+        if len(self._slices) > 0:
             for v in self._slices.values():
                 slices.append(v.get_slice())
 
             return False, slices
         else:
-            return True, "There is no slices"
+            return True, "there is no slices"
 
     @inlineCallbacks
     @wamp.register(uri="sliceservice.set_slice_node")
