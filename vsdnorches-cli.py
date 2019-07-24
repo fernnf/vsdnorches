@@ -87,6 +87,7 @@ def show_node():
     pass
 
 
+
 @show.command("slice")
 @click.option('--slice-id', 'slice')
 def show_slice(slice):
