@@ -136,6 +136,7 @@ def main():
 import wamp
 
 
+
 class SliceCli(ApplicationSession):
 
     def _main(self):
