@@ -133,6 +133,7 @@ def main():
         exit(1)
 
 """
+import wamp
 
 
 class SliceCli(ApplicationSession):
