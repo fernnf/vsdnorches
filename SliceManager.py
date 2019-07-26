@@ -251,10 +251,7 @@ class SliceService(ApplicationSession):
     def get_slices(self):
         slices = []
         if len(self._slices) > 0:
-            for v in self._slices.values():
-                slices.append(v.get_slice())
-
-            return False, slices
+            return False, self._slices.copy()
         else:
             return True, "there is no slices"
 
@@ -262,13 +259,14 @@ class SliceService(ApplicationSession):
     @wamp.register(uri="sliceservice.set_slice_node")
     def set_slice_node(self, slice_id, device_id, datapath_id, label, protocols):
         try:
-            resp = yield self.call("topologyservice.has_node", device_id)
+            _, resp = yield self.call("topologyservice.has_node", device_id)
+            self.log.error(str(resp))
             if not resp:
-                return True, "the node {i} was not found on topology".format(i=device_id)
+                return True, "the device-id <{i}> was not found on topology".format(i=device_id)
 
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice {i} was not found".format(i=slice_id)
+                return True, "the slice <{i}> was not found".format(i=slice_id)
 
             virtdev_id = slice.set_slice_node(physical_id=device_id,
                                               datapath_id=datapath_id,
@@ -353,6 +351,18 @@ class SliceService(ApplicationSession):
                 return True, "the slice {i} was not found".format(i=slice_id)
 
             link = slice.get_slice_link(virtlink_id)
+            return False, link
+        except Exception as ex:
+            return True, str(ex)
+
+    @wamp.register(uri="sliceservice.get_slice_links")
+    def get_slice_link(self, slice_id):
+        try:
+            slice = self._slices.get(slice_id, None)
+            if slice is None:
+                return True, "the slice {i} was not found".format(i=slice_id)
+
+            link = slice.get_slice_links()
             return False, link
         except Exception as ex:
             return True, str(ex)

@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 from gevent import monkey
 
 monkey.patch_all()
@@ -13,10 +14,34 @@ config = {
 }
 
 
-def print_slice(n):
-    n.pop('directed')
-    n.pop('multigraph')
-    click.echo(p(n))
+def get_connection(app, **kwargs):
+    with Client(url=config.get('url'), realm=config.get('realm')) as client:
+        err, msg = client.call(app, **kwargs)
+    return err, msg
+
+
+def print_slice(s):
+    if isinstance(s, list):
+        for i in s:
+            click.echo(p(i))
+    else:
+        click.echo(p(s))
+
+
+def print_node(n):
+    if isinstance(n, list):
+        for i in n:
+            click.echo(p(i))
+    else:
+        click.echo(p(n))
+
+
+def print_link(l):
+    if isinstance(l, list):
+        for i in l:
+            click.echo(p(i))
+    else:
+        click.echo(p(l))
 
 
 def is_exist_node(ctx, parm, value):
@@ -27,28 +52,34 @@ def is_exist_node(ctx, parm, value):
     if client is None:
         raise click.Abort("client was not configurated")
 
+
 def check_dpid(ctx, param, value):
     if len(value) != 16:
-        raise click.BadOptionUsage(option_name=param, message="the datapath id must have 16 digits")
+        raise click.BadOptionUsage(option_name=param,
+                                   message="the datapath id must have 16 digits")
     import string
     if all(c in string.hexdigits for c in value.split()):
-        raise click.BadOptionUsage(option_name=param, message="this datapath id is not valid")
+        raise click.BadOptionUsage(option_name=param,
+                                   message="this datapath id is not valid")
 
 
 def check_ctl_addr(ctx, param, value):
     addr = value.split(':')
 
     if len(addr) != 3:
-        raise click.BadOptionUsage(option_name=param, message="the controller address is not valid")
+        raise click.BadOptionUsage(option_name=param,
+                                   message="the controller address is not valid")
 
     if addr[0] != 'tcp':
-        raise click.BadOptionUsage(option_name=param, message="just tcp protocol is supported only")
+        raise click.BadOptionUsage(option_name=param,
+                                   message="just tcp protocol is supported only")
 
     import socket
     try:
         socket.inet_aton(addr[1])
     except Exception:
-        raise click.BadOptionUsage(option_name=param, message="the ip address is not valid")
+        raise click.BadOptionUsage(option_name=param,
+                                   message="the ip address is not valid")
 
 
 @click.group()
@@ -77,40 +108,82 @@ def delete():
     pass
 
 
+# Show sub-commands
 @main.group()
 def show():
     pass
 
-# Show sub-commands
-@show.command("node")
-def show_node():
-    pass
+
+@show.command("topology")
+def show_topology():
+    app = 'topologyservice.get_topology'
+
+    err, msg = get_connection(app)
+    if err:
+        raise click.UsageError(msg)
+    msg.pop('directed')
+    msg.pop('multigraph')
+    click.echo(p(msg, indent=4))
 
 
-
-@show.command("slice")
-@click.option('--slice-id', 'slice')
-def show_slice(slice):
-    app = ('sliceservice.get_slice', 'sliceservice.get_slices')
-    with Client(url=config.get('url'), realm=config.get('realm')) as client:
-        if slice is None:
-            err, msg = client.call(app[1])
+@show.group("slice", invoke_without_command=True)
+@click.option('--slice-id', '-s')
+@click.pass_context
+def show_slice(ctx, slice_id):
+    app = ['sliceservice.get_slice', 'sliceservice.get_slices']
+    if ctx.invoked_subcommand is None:
+        try:
+            if slice_id is None:
+                err, msg = get_connection(app[1])
+            else:
+                err, msg = get_connection(app[0], slice_id=slice_id)
 
             if err:
                 raise click.UsageError(msg)
 
-            for i in msg:
-                print_slice(i)
-        else:
-            err, msg = client.call(app[0], slice)
-            if err:
-                raise click.UsageError(msg)
             print_slice(msg)
+        except Exception as ex:
+            raise click.UsageError(str(ex))
 
 
-@show.command("link")
-def show_link():
-    pass
+@show_slice.command('node')
+@click.argument('slice-id', required=True)
+@click.argument('node-id', required=False)
+def show_slice_node(ctx, slice_id, node_id):
+    app = ['sliceservice.get_slice_node', 'sliceservice.get_slice_nodes']
+    try:
+        if node_id is None:
+            err, msg = get_connection(app[1], slice_id=slice_id)
+        else:
+            err, msg = get_connection(app[0], slice_id=slice_id, virtdev_id=node_id)
+
+        if err:
+            raise click.UsageError(msg)
+
+        print_node(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+@show_slice.command('link')
+@click.argument('slice-id', required=True)
+@click.argument('link-id', required=False)
+def show_slice_link(slice_id, link_id):
+    app = ['sliceservice.get_slice_link', 'sliceservice.get_slice_links']
+
+    try:
+        if link_id is None:
+            err, msg = get_connection(app[1], slice_id=slice_id)
+        else:
+            err, msg = get_connection(app[0], slice_id=slice_id, virtlink_id=link_id)
+
+        if err:
+            raise click.UsageError(msg)
+
+        print_link(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
 
 ##
 @main.group()
@@ -118,86 +191,60 @@ def configure():
     pass
 
 
+@configure.group("slice", invoke_without_command=True)
+@click.option('--slice-id', required=True)
+@click.pass_context
+def config_slice(ctx, slice_id):
+    if ctx.invoked_subcommand is not None:
+        ctx.obj = {'slice_id': slice_id}
+    else:
+        click.echo(ctx.get_help())
 
 
-#@create.group()
-#def slice():
+@config_slice.group("node")
+def config_node():
+    pass
 
-"""
-@slice.command()
-@click.option('--tenant-id', 'tenant', required=True)
-@click.option('--controller', required=True, callback=check_ctl_addr)
-@click.option('--label', required=True)
-def create(tenant, controller, label):
-    svr = "sliceservice.set_slice"
-    with Client(url=config.get('url'), realm=config.get('realm')) as client:
-        err, msg = client.call(svr, tenant, label, controller)
+
+@config_node.command('add')
+@click.argument('device-id', required=True)
+@click.argument('datapath_id', required=False)
+@click.argument('label', required=False)
+@click.argument('protocols', required=False)
+@click.pass_obj
+def config_node_add(obj, device_id, datapath_id, label, protocols):
+    app = 'sliceservice.set_slice_node'
+    slice_id = obj.get('slice_id')
+    try:
+        err, msg = get_connection(app,
+                                  slice_id=slice_id,
+                                  device_id=device_id,
+                                  datapath_id=datapath_id,
+                                  label=label,
+                                  protocols=protocols)
+
         if err:
             raise click.UsageError(msg)
+
         click.echo(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
 
 
-@slice.command()
-@click.option('--slice-id', 'slice', required=True)
-def delete(slice):
-    svr = "sliceservice.del_slice"
-    with Client(url=config.get('url'), realm=config.get('realm')) as client:
-        err, msg = client.call(svr, slice)
+@config_node.command('remove')
+@click.argument('node-id', required=True)
+@click.pass_obj
+def config_node_remove(obj, node_id):
+    app = 'sliceservice.del_slice_node'
+    slice_id = obj.get('slice_id')
+    try:
+        err, msg = get_connection(app, slice_id=slice_id, node_id=node_id)
         if err:
             raise click.UsageError(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
 
 
-@slice.group()
-def show():
-    pass
-
-
-@show.command()
-@click.option('--slice-id', 'slice')
-def slice(node):
-
-    app = ('sliceservice.get_slice', 'sliceservice.get_slices')
-    with Client(url=config.get('url'), realm=config.get('realm')) as client:
-        if node is None:
-            err, msg = client.call(app[1])
-
-            if err:
-                raise click.UsageError(msg)
-
-            for i in msg:
-                print_slice(i)
-        else:
-            err, msg = client.call(app[0], slice)
-            if err:
-                raise click.UsageError(msg)
-            print_slice(msg)
-
-@show.command()
-@click.option('--node-id', 'node')
-def node():
-    pass
-
-@slice.group()
-def add():
-    pass
-
-
-@add.command()
-@click.option('--datapath-id', callback=check_dpid, required=True)
-def node():
-    pass
-
-@add.group()
-def link():
-    pass
-
-
-@slice.group()
-def rem():
-    pass
-
-# End
-"""
 
 if __name__ == '__main__':
     main()
