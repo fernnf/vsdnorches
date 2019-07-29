@@ -95,12 +95,44 @@ def main(url, realm):
         config.update({'realm': realm})
 
 
-# Topology Sub-commands
-#
+"""
+Subcommand Create
+"""
+
 
 @main.group()
 def create():
     pass
+
+
+@create.command('slice')
+@click.argument('tenant-id', required=True)
+@click.option('--label', '-l', required=False)
+@click.option('--controller', '-c', required=False)
+def create_slice(tenant_id, label, controller):
+    app = 'sliceservice.set_slice'
+    try:
+        err, msg = get_connection(app,
+                                  tenant_id=tenant_id,
+                                  label=label,
+                                  controller=controller)
+
+        if err:
+            click.echo(err)
+            raise click.UsageError(msg)
+
+        click.echo(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+"""
+END
+"""
+
+"""
+Subcommand Delete
+"""
 
 
 @main.group()
@@ -108,7 +140,26 @@ def delete():
     pass
 
 
-# Show sub-commands
+@delete.command('slice')
+@click.argument('slice-id')
+def delete_slice(slice_id):
+    app = 'sliceservice.del_slice'
+    try:
+        err, msg = get_connection(app, slice_id=slice_id)
+        if err:
+            raise click.UsageError(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+"""
+END
+"""
+"""
+Subcommand Show
+"""
+
+
 @main.group()
 def show():
     pass
@@ -140,16 +191,16 @@ def show_slice(ctx, slice_id):
 
             if err:
                 raise click.UsageError(msg)
+            click.echo(p(msg))
 
-            print_slice(msg)
         except Exception as ex:
             raise click.UsageError(str(ex))
 
 
 @show_slice.command('node')
 @click.argument('slice-id', required=True)
-@click.argument('node-id', required=False)
-def show_slice_node(ctx, slice_id, node_id):
+@click.option('--node-id', '-n', required=False)
+def show_slice_node(slice_id, node_id):
     app = ['sliceservice.get_slice_node', 'sliceservice.get_slice_nodes']
     try:
         if node_id is None:
@@ -167,7 +218,7 @@ def show_slice_node(ctx, slice_id, node_id):
 
 @show_slice.command('link')
 @click.argument('slice-id', required=True)
-@click.argument('link-id', required=False)
+@click.option('--link-id', '-l', required=False)
 def show_slice_link(slice_id, link_id):
     app = ['sliceservice.get_slice_link', 'sliceservice.get_slice_links']
 
@@ -185,14 +236,22 @@ def show_slice_link(slice_id, link_id):
         raise click.UsageError(str(ex))
 
 
-##
+"""
+END
+"""
+"""
+Subcommand Configure
+"""
+
+
 @main.group()
 def configure():
     pass
 
-
+#TODO: ss
 @configure.group("slice", invoke_without_command=True)
-@click.option('--slice-id', required=True)
+@click.argument('slice-id', required=True)
+@click.option('--deploy', '-d', required=False)
 @click.pass_context
 def config_slice(ctx, slice_id):
     if ctx.invoked_subcommand is not None:
@@ -201,18 +260,18 @@ def config_slice(ctx, slice_id):
         click.echo(ctx.get_help())
 
 
-@config_slice.group("node")
-def config_node():
+@config_slice.group("add")
+def config_slice_add():
     pass
 
 
-@config_node.command('add')
+@config_slice_add.command('node')
 @click.argument('device-id', required=True)
-@click.argument('datapath_id', required=False)
-@click.argument('label', required=False)
-@click.argument('protocols', required=False)
+@click.option('--datapath_id', '-d', required=False)
+@click.option('--label', '-l', required=False)
+@click.option('--protocols', '-p', required=False)
 @click.pass_obj
-def config_node_add(obj, device_id, datapath_id, label, protocols):
+def config_slice_add_node(obj, device_id, datapath_id, label, protocols):
     app = 'sliceservice.set_slice_node'
     slice_id = obj.get('slice_id')
     try:
@@ -231,20 +290,118 @@ def config_node_add(obj, device_id, datapath_id, label, protocols):
         raise click.UsageError(str(ex))
 
 
-@config_node.command('remove')
-@click.argument('node-id', required=True)
+@config_slice_add.command('link')
+@click.argument('source-node-id', required=True)
+@click.argument('target-node-id', required=True)
+@click.option('--tunnel', '-t', required=False, help="tunnel type, e.g. ethernet or vxlan")
+@click.option('--key', '-k', required=False, help="key identification, e.g. vlan-id, vxlan-id")
 @click.pass_obj
-def config_node_remove(obj, node_id):
-    app = 'sliceservice.del_slice_node'
+def config_slice_add_link(obj, source_node_id, target_node_id, tunnel, key):
+    app = 'sliceservice.set_slice_link'
     slice_id = obj.get('slice_id')
     try:
-        err, msg = get_connection(app, slice_id=slice_id, node_id=node_id)
+        err, msg = get_connection(app,
+                                  slice_id=slice_id,
+                                  src_virtdev_id=source_node_id,
+                                  dst_virtdev_id=target_node_id,
+                                  tunnel=tunnel,
+                                  key=key)
         if err:
             raise click.UsageError(msg)
     except Exception as ex:
         raise click.UsageError(str(ex))
 
 
+@config_slice.group("del")
+def config_slice_del():
+    pass
+
+
+@config_slice_del.command('node')
+@click.argument('device-id', required=True)
+@click.pass_obj
+def config_slice_del_node(obj, device_id):
+    app = 'sliceservice.del_slice_node'
+    slice_id = obj.get('slice_id')
+
+    try:
+        err, msg = get_connection(app, slice_id=slice_id, virtddev_id=device_id)
+        if err:
+            raise click.UsageError(msg)
+
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+@config_slice_del.command('link')
+@click.argument('link-id', required=True)
+@click.pass_obj
+def config_slice_del_link(obj, link_id):
+    app = 'sliceservice.del_slice_link'
+    slice_id = obj.get('slice_id')
+    try:
+        err, msg = get_connection(app, slice_id=slice_id, virtlink_id=link_id)
+        if err:
+            raise click.UsageError(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+@configure.group("topology")
+def config_topo():
+    pass
+
+
+@config_topo.group('add')
+def config_topo_add():
+    pass
+
+
+@config_topo_add.command("link")
+@click.argument("source-id", required=True)
+@click.argument("target-id", required=True)
+@click.argument("source-portnum", required=True)
+@click.argument("target-portnum", required=True)
+@click.option('--tunnel', '-t', required=False)
+@click.option('--key', '-k', required=False)
+def config_topo_add_link(source_id, target_id, source_portnum, target_portnum, tunnel, key):
+    app = 'topologyservice.set_link'
+
+    try:
+        err, msg = get_connection(app,
+                                  source_id=source_id,
+                                  target_id=target_id,
+                                  source_portnum=source_portnum,
+                                  target_portnum=target_portnum,
+                                  tunnel=tunnel,
+                                  key=key)
+        if err:
+            raise click.UsageError(msg)
+        click.echo(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+@config_topo.group('del')
+def config_topo_del():
+    pass
+
+
+@config_topo_del.command("link")
+@click.argument("link-id", required=True)
+def config_topo_del_link(link_id):
+    app = 'topologyservice.del_link'
+    try:
+        err, msg = get_connection(app, link_id=link_id)
+        if err:
+            raise click.UsageError(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+
+"""
+END
+"""
 
 if __name__ == '__main__':
     main()

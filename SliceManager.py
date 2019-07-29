@@ -184,9 +184,21 @@ class SliceService(ApplicationSession):
             slice.set_slice_status(msg["status_code"])
             return False, None
 
-
         except Exception as ex:
             return True, str(ex)
+
+    @wamp.register(uri="sliceservice.deploy_slice")
+    def deploy_slice(self, slice_id):
+        app = "slicebuilderservice.deploy"
+        slice = self._slices.get(slice_id, None)
+
+        if slice is None:
+            return True, "the slice <{i}> was not found".format(i=slice_id)
+        try:
+            err, msg = self.call(app, slice=slice.get_slice())
+            return err, msg
+        except Exception as ex:
+            self.log.error(str(ex))
 
     @wamp.register(uri="sliceservice.set_slice")
     def set_slice(self, tenant_id, label, controller):
@@ -231,7 +243,6 @@ class SliceService(ApplicationSession):
             else:
                 return True, "slice <{i}> was not found".format(i=slice_id)
 
-
         except Exception as ex:
             return True, str(ex)
 
@@ -251,7 +262,9 @@ class SliceService(ApplicationSession):
     def get_slices(self):
         slices = []
         if len(self._slices) > 0:
-            return False, self._slices.copy()
+            for s in self._slices.values():
+                slices.append(s.get_slice())
+            return False, slices
         else:
             return True, "there is no slices"
 
@@ -259,14 +272,15 @@ class SliceService(ApplicationSession):
     @wamp.register(uri="sliceservice.set_slice_node")
     def set_slice_node(self, slice_id, device_id, datapath_id, label, protocols):
         try:
-            _, resp = yield self.call("topologyservice.has_node", device_id)
-            self.log.error(str(resp))
-            if not resp:
-                return True, "the device-id <{i}> was not found on topology".format(i=device_id)
 
             slice = self._slices.get(slice_id, None)
             if slice is None:
                 return True, "the slice <{i}> was not found".format(i=slice_id)
+
+            _, resp = yield self.call("topologyservice.has_node", device_id)
+            self.log.error(str(resp))
+            if not resp:
+                return True, "the device-id <{i}> was not found on topology".format(i=device_id)
 
             virtdev_id = slice.set_slice_node(physical_id=device_id,
                                               datapath_id=datapath_id,
@@ -311,7 +325,7 @@ class SliceService(ApplicationSession):
             if slice is None:
                 return True, "the slice {i} was not found".format(i=slice_id)
 
-            nodes = slice.get_slice_node()
+            nodes = slice.get_slice_nodes()
             return False, nodes
         except Exception as ex:
             return True, str(ex)

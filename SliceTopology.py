@@ -112,19 +112,19 @@ class TopologyDAO(object):
         else:
             raise ValueError("the link <{s},{t}> was not found".format(s=source_id, t=target_id))
 
-    def get_virt_instaces(self, device_id):
+    def get_virt_instances(self, device_id):
         return self._find_virt_nodes(device_id)
 
     def set_virt_instance(self, device_id, virtdev_id):
         node = self.get_node(device_id)
         node[1]["virt_nodes"].append(virtdev_id)
 
-    def del_virt_instace(self, device_id, virtdev_id):
+    def del_virt_instance(self, device_id, virtdev_id):
         node = self.get_node(device_id)
         node[1]["virt_nodes"].remove(virtdev_id)
 
-    def len_virt_instaces(self, device_id):
-        return len(self.get_virt_instaces(device_id))
+    def len_virt_instances(self, device_id):
+        return len(self.get_virt_instances(device_id))
 
     def get_shortest_path(self, source_id, target_id):
         return nx.shortest_path(self._topo, source_id, target_id)
@@ -142,6 +142,8 @@ class TopologyService(ApplicationSession):
     def __init__(self, *args, **kwargs):
         super(TopologyService, self).__init__(*args, **kwargs)
         self._topo = TopologyDAO(label="Transport")
+
+
 
     @inlineCallbacks
     def onJoin(self, details):
@@ -264,7 +266,7 @@ class TopologyService(ApplicationSession):
     @wamp.register(uri="topologyservice.del_instance")
     def del_instance(self, device_id, virt_device_id):
         try:
-            self._topo.del_virt_instace(device_id, virt_device_id)
+            self._topo.del_virt_instance(device_id, virt_device_id)
             return False, None
         except Exception as ex:
             return True, str(ex)
@@ -272,7 +274,7 @@ class TopologyService(ApplicationSession):
     @wamp.register(uri="topologyservice.get_instances")
     def get_instances(self, device_id):
         try:
-            virt = self._topo.get_virt_instaces(device_id)
+            virt = self._topo.get_virt_instances(device_id)
             return False, virt
         except Exception as ex:
             return True, str(ex)
@@ -292,5 +294,3 @@ class TopologyService(ApplicationSession):
             return False, topo
         except Exception as ex:
             return True, str(ex)
-
-
