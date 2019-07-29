@@ -248,7 +248,7 @@ Subcommand Configure
 def configure():
     pass
 
-#TODO: ss
+
 @configure.group("slice", invoke_without_command=True)
 @click.argument('slice-id', required=True)
 @click.option('--deploy', '-d', required=False)
