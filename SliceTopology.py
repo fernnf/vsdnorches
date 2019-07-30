@@ -143,8 +143,6 @@ class TopologyService(ApplicationSession):
         super(TopologyService, self).__init__(*args, **kwargs)
         self._topo = TopologyDAO(label="Transport")
 
-
-
     @inlineCallbacks
     def onJoin(self, details):
         self.log.info("Topology Service Starting ...")

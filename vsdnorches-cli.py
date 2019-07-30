@@ -252,8 +252,10 @@ def configure():
 @configure.group("slice", invoke_without_command=True)
 @click.argument('slice-id', required=True)
 @click.option('--deploy', '-d', required=False)
+@click.option('--start', '-s', required=False)
+@click.option('--stop', '-p', required=False)
 @click.pass_context
-def config_slice(ctx, slice_id):
+def config_slice(ctx, slice_id, deploy, start, stop):
     if ctx.invoked_subcommand is not None:
         ctx.obj = {'slice_id': slice_id}
     else:
