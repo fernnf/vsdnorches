@@ -269,8 +269,8 @@ def config_slice_add():
 
 @config_slice_add.command('node')
 @click.argument('device-id', required=True)
+@click.argument('label', required=True)
 @click.option('--datapath_id', '-d', required=False)
-@click.option('--label', '-l', required=False)
 @click.option('--protocols', '-p', required=False)
 @click.pass_obj
 def config_slice_add_node(obj, device_id, datapath_id, label, protocols):
