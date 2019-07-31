@@ -18,7 +18,12 @@
         {
           "type": "class",
           "realm": "realm1",
-          "classname": "SliceManager.SliceService"
+          "classname": "SliceManager.SliceManagerService"
+        },
+        {
+          "type": "class",
+          "realm": "realm1",
+          "classname": "SliceBuilder.SliceBuilderService"
         }
       ],
       "realms": [

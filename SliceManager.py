@@ -1,12 +1,10 @@
 from enum import Enum
-
 from uuid import uuid4
+
 import networkx as nx
 import networkx.readwrite as nxparser
-
-from autobahn.twisted.wamp import ApplicationSession
 from autobahn import wamp
-
+from autobahn.twisted.wamp import ApplicationSession
 from twisted.internet.defer import inlineCallbacks
 
 
@@ -150,10 +148,10 @@ class SliceStatus(Enum):
         return self.name
 
 
-class SliceService(ApplicationSession):
+class SliceManagerService(ApplicationSession):
 
     def __init__(self, *args, **kwargs):
-        super(SliceService, self).__init__(*args, **kwargs)
+        super(SliceManagerService, self).__init__(*args, **kwargs)
         self._slices = {}
 
     @inlineCallbacks
