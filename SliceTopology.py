@@ -160,6 +160,18 @@ class TopologyService(ApplicationSession):
         except Exception as ex:
             self.log.error(str(ex))
 
+    @wamp.subscribe(uri="topologyservice.rem_device")
+    def rem_device(self, msg):
+        try:
+            for n in self._topo.get_nodes():
+                nid, data = n
+                if msg["datapath_id"] == data["datapath_id"]:
+                    self.del_node(nid)
+                    self.log.info("device <{i}> has removed to topology".format(i=nid))
+
+        except Exception as ex:
+            self.log.error(str(ex))
+
     @wamp.register(uri="topologyservice.set_node")
     def set_node(self, datapath_id, prefix_uri, label):
         try:

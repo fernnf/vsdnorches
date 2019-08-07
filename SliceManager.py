@@ -38,6 +38,8 @@ class SliceTopologyDAO(object):
             self._slice_top.graph["status"] = str(SliceStatus.WITHDRAW)
         elif SliceStatus.DEPLOY.value == code:
             self._slice_top.graph["status"] = str(SliceStatus.DEPLOY)
+        elif SliceStatus.DONE.value == code:
+            self._slice_top.graph["status"] = str(SliceStatus.DONE)
         else:
             raise ValueError("the status code {i} is unknown".format(i=code))
 
@@ -65,10 +67,10 @@ class SliceTopologyDAO(object):
         tenant_id = self.get_slice_tenant_id()
 
         if datapath_id is None:
-            datapath_id = str(uuid4())[:16]
+            datapath_id = str(uuid4()).replace("-","")[:16]
 
         self._slice_top.add_node(virtdev_id,
-                                 physical_id=device_id,
+                                 device_id=device_id,
                                  tenant_id=tenant_id,
                                  datapath_id=datapath_id,
                                  type=type,
@@ -143,6 +145,7 @@ class SliceStatus(Enum):
     WITHDRAW = 3
     RUN = 4
     STOP = 5
+    DONE = 6
 
     def __str__(self):
         return self.name
@@ -160,8 +163,8 @@ class SliceManagerService(ApplicationSession):
         yield self.register(self)
         self.log.info("Slice Service Started...")
 
-    @wamp.subscribe(uri="sliceservice.update_slice_status")
-    def update_slice_status(self, msg):
+    @wamp.register(uri="sliceservice.update_slice_status")
+    def update_slice_status(self, slice_id, code):
         """
         :param msg: a json file with the following data:
 
@@ -173,13 +176,12 @@ class SliceManagerService(ApplicationSession):
         :return: no return
         """
         try:
-            slice_id = msg["slice_id"]
             slice = self._slices.get(slice_id, None)
-
+            print(code)
             if slice is None:
                 return True, "the slice <{i}> was not found".format(i=slice_id)
 
-            slice.set_slice_status(msg["status_code"])
+            slice.set_slice_status(code)
             return False, None
 
         except Exception as ex:
@@ -193,10 +195,11 @@ class SliceManagerService(ApplicationSession):
         if slice is None:
             return True, "the slice <{i}> was not found".format(i=slice_id)
         try:
-            err, msg = self.call(app, slice=slice.get_slice())
-            return err, msg
+            import json
+            print(json.dumps(slice.get_slice(), indent=4, sort_keys=True))
+            return self.call(app, slice=slice.get_slice())
         except Exception as ex:
-            self.log.error(str(ex))
+            return True, str(ex)
 
     @wamp.register(uri="sliceservice.set_slice")
     def set_slice(self, tenant_id, label, controller):
@@ -280,7 +283,7 @@ class SliceManagerService(ApplicationSession):
             if not resp:
                 return True, "the device-id <{i}> was not found on topology".format(i=device_id)
 
-            virtdev_id = slice.set_slice_node(physical_id=device_id,
+            virtdev_id = slice.set_slice_node(device_id=device_id,
                                               datapath_id=datapath_id,
                                               label=label,
                                               protocols=protocols)

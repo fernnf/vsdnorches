@@ -4,7 +4,7 @@ from gevent import monkey
 monkey.patch_all()
 
 import click
-
+import json
 from wampy import Client
 from pprint import pprint as p
 
@@ -18,6 +18,10 @@ def get_connection(app, **kwargs):
     with Client(url=config.get('url'), realm=config.get('realm')) as client:
         err, msg = client.call(app, **kwargs)
     return err, msg
+
+
+def print_info(msg):
+    click.echo(print(json.dumps(msg, indent=4, sort_keys=True)))
 
 
 def print_slice(s):
@@ -172,9 +176,9 @@ def show_topology():
     err, msg = get_connection(app)
     if err:
         raise click.UsageError(msg)
-    msg.pop('directed')
-    msg.pop('multigraph')
-    click.echo(p(msg, indent=4))
+    # msg.pop('directed')
+    # msg.pop('multigraph')
+    print_info(msg)
 
 
 @show.group("slice", invoke_without_command=True)
@@ -191,7 +195,7 @@ def show_slice(ctx, slice_id):
 
             if err:
                 raise click.UsageError(msg)
-            click.echo(p(msg))
+            print_info(msg[0])
 
         except Exception as ex:
             raise click.UsageError(str(ex))
@@ -211,7 +215,8 @@ def show_slice_node(slice_id, node_id):
         if err:
             raise click.UsageError(msg)
 
-        print_node(msg)
+        print_info(msg)
+
     except Exception as ex:
         raise click.UsageError(str(ex))
 
@@ -231,7 +236,8 @@ def show_slice_link(slice_id, link_id):
         if err:
             raise click.UsageError(msg)
 
-        print_link(msg)
+        print_info(msg)
+
     except Exception as ex:
         raise click.UsageError(str(ex))
 
@@ -251,11 +257,9 @@ def configure():
 
 @configure.group("slice", invoke_without_command=True)
 @click.argument('slice-id', required=True)
-@click.option('--deploy', '-d', required=False)
-@click.option('--start', '-s', required=False)
-@click.option('--stop', '-p', required=False)
 @click.pass_context
-def config_slice(ctx, slice_id, deploy, start, stop):
+def config_slice(ctx, slice_id):
+    app = ["sliceservice.deploy_slice"]
     if ctx.invoked_subcommand is not None:
         ctx.obj = {'slice_id': slice_id}
     else:
@@ -319,15 +323,41 @@ def config_slice_del():
     pass
 
 
-@config_slice_del.command('node')
-@click.argument('device-id', required=True)
+@config_slice.group("deploy", invoke_without_command=True)
 @click.pass_obj
-def config_slice_del_node(obj, device_id):
+def config_slice_deploy(obj):
+    app = "sliceservice.deploy_slice"
+    slice_id = obj.get('slice_id')
+    try:
+        err, msg = get_connection(app, slice_id=slice_id)
+        click.echo(msg)
+        if err:
+            raise click.UsageError(msg)
+    except Exception as ex:
+        raise click.UsageError(str(ex))
+
+    # click.echo("deploy " + slice_id)
+
+
+@config_slice.group("start")
+def config_slice_start():
+    pass
+
+
+@config_slice.group("stop")
+def config_slice_start():
+    pass
+
+
+@config_slice_del.command('node')
+@click.argument('virtdev-id', required=True)
+@click.pass_obj
+def config_slice_del_node(obj, virtdev_id):
     app = 'sliceservice.del_slice_node'
     slice_id = obj.get('slice_id')
 
     try:
-        err, msg = get_connection(app, slice_id=slice_id, virtddev_id=device_id)
+        err, msg = get_connection(app, slice_id=slice_id, virtdev_id=virtdev_id)
         if err:
             raise click.UsageError(msg)
 
