@@ -46,6 +46,7 @@ class SliceBuilderService(ApplicationSession):
 
         self._instance_register(device_id, node['id'])
 
+
     @inlineCallbacks
     def onJoin(self, details):
         self.log.info('Slice Builder Service Starting ...')
