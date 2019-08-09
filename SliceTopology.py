@@ -152,11 +152,9 @@ class TopologyService(ApplicationSession):
         self.log.info("Topology Service Started ...")
 
     @wamp.subscribe(uri = "topologyservice.new_device")
-    def new_device(self, msg):
+    def new_device(self, datapath_id, prefix_uri, label):
         try:
-            device_id = self._topo.set_node(datapath_id = msg["datapath_id"],
-                                            prefix_uri = msg["prefix_uri"],
-                                            label = msg["label"])
+            device_id = self._topo.set_node(datapath_id, prefix_uri, label)
             self.log.info("new device <{i}> has added to topology".format(i = device_id))
         except Exception as ex:
             self.log.error(str(ex))
