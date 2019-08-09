@@ -116,12 +116,13 @@ def create():
 @click.option('--label', '-l', required=False)
 @click.option('--controller', '-c', required=False)
 def create_slice(tenant_id, label, controller):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     try:
         ret = smc.set_slice(tenant_id, label, controller)
         click.echo(ret)
     except Exception as ex:
         raise click.UsageError(str(ex))
+
 
 """
 END
@@ -140,12 +141,13 @@ def delete():
 @delete.command('slice')
 @click.argument('slice-id')
 def delete_slice(slice_id):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     try:
         ret = smc.del_slice(slice_id)
         click.echo(ret)
     except Exception as ex:
         raise click.UsageError(str(ex))
+
 
 """
 END
@@ -162,18 +164,19 @@ def show():
 
 @show.command("topology")
 def show_topology():
-    tsc = TopologyServiceClient(url = config['url'], realm = config['realm'])
+    tsc = TopologyServiceClient(url=config['url'], realm=config['realm'])
     try:
         ret = tsc.get_topology()
         print_info(ret)
     except Exception as ex:
         raise click.UsageError(str(ex))
 
+
 @show.group("slice", invoke_without_command=True)
 @click.option('--slice-id', '-s')
 @click.pass_context
 def show_slice(ctx, slice_id):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     try:
         if slice_id is None:
             ret = smc.get_slices()
@@ -184,11 +187,12 @@ def show_slice(ctx, slice_id):
     except Exception as ex:
         raise click.UsageError(str(ex))
 
+
 @show_slice.command('node')
 @click.argument('slice-id', required=True)
-@click.option('--virtdev-id', '-v', required = False)
+@click.option('--virtdev-id', '-v', required=False)
 def show_slice_node(slice_id, virtdev_id):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     try:
         if virtdev_id is None:
             ret = smc.get_slice_nodes(slice_id)
@@ -198,11 +202,12 @@ def show_slice_node(slice_id, virtdev_id):
     except Exception as ex:
         raise click.UsageError(str(ex))
 
+
 @show_slice.command('link')
 @click.argument('slice-id', required=True)
-@click.option('--virtlink-id', '-l', required = False)
+@click.option('--virtlink-id', '-l', required=False)
 def show_slice_link(slice_id, virtlink_id):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     try:
         if virtlink_id is None:
             ret = smc.get_slice_links(slice_id)
@@ -213,6 +218,7 @@ def show_slice_link(slice_id, virtlink_id):
 
     except Exception as ex:
         raise click.UsageError(str(ex))
+
 
 """
 END
@@ -249,7 +255,7 @@ def config_slice_add():
 @click.option('--protocols', '-p', required=False)
 @click.pass_obj
 def config_slice_add_node(obj, device_id, datapath_id, label, protocols):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     slice_id = obj.get('slice_id')
     try:
         ret = smc.set_slice_node(slice_id, device_id, datapath_id, label, protocols)
@@ -265,7 +271,7 @@ def config_slice_add_node(obj, device_id, datapath_id, label, protocols):
 @click.option('--key', '-k', required=False, help="key identification, e.g. vlan-id, vxlan-id")
 @click.pass_obj
 def config_slice_add_link(obj, source_node_id, target_node_id, tunnel, key):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     slice_id = obj.get('slice_id')
     try:
         ret = smc.set_slice_link(slice_id, source_node_id, target_node_id, tunnel, key)
@@ -282,13 +288,14 @@ def config_slice_del():
 @config_slice.group("deploy", invoke_without_command=True)
 @click.pass_obj
 def config_slice_deploy(obj):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     slice_id = obj.get('slice_id')
     try:
         ret = smc.deploy_slice(slice_id)
         click.echo(ret)
     except Exception as ex:
         raise click.UsageError(str(ex))
+
 
 @config_slice.group("start")
 def config_slice_start():
@@ -304,7 +311,7 @@ def config_slice_start():
 @click.argument('virtdev-id', required=True)
 @click.pass_obj
 def config_slice_del_node(obj, virtdev_id):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     slice_id = obj.get('slice_id')
     try:
         ret = smc.del_slice_node(slice_id, virtdev_id)
@@ -312,17 +319,19 @@ def config_slice_del_node(obj, virtdev_id):
     except Exception as ex:
         raise click.UsageError(str(ex))
 
+
 @config_slice_del.command('link')
-@click.argument('virtlink-id', required = True)
+@click.argument('virtlink-id', required=True)
 @click.pass_obj
 def config_slice_del_link(obj, virtlink_id):
-    smc = SliceManagerClient(url = config['url'], realm = config['realm'])
+    smc = SliceManagerClient(url=config['url'], realm=config['realm'])
     slice_id = obj.get('slice_id')
     try:
         ret = smc.del_slice_link(slice_id, virtlink_id)
         click.echo(ret)
     except  Exception as ex:
         raise click.UsageError(str(ex))
+
 
 @configure.group("topology")
 def config_topo():
@@ -342,12 +351,13 @@ def config_topo_add():
 @click.option('--tunnel', '-t', required=False)
 @click.option('--key', '-k', required=False)
 def config_topo_add_link(source_id, target_id, source_portnum, target_portnum, tunnel, key):
-    tsc = TopologyServiceClient(url = config['url'], realm = config['realm'])
+    tsc = TopologyServiceClient(url=config['url'], realm=config['realm'])
     try:
         ret = tsc.set_link(source_id, target_id, source_portnum, target_portnum, tunnel, key)
         click.echo(ret)
     except Exception as ex:
         raise click.UsageError(str(ex))
+
 
 @config_topo.group('del')
 def config_topo_del():
@@ -357,12 +367,13 @@ def config_topo_del():
 @config_topo_del.command("link")
 @click.argument("link-id", required=True)
 def config_topo_del_link(link_id):
-    tsc = TopologyServiceClient(url = config['url'], realm = config['realm'])
+    tsc = TopologyServiceClient(url=config['url'], realm=config['realm'])
     try:
         ret = tsc.del_link(link_id)
         click.echo(ret)
     except Exception as ex:
         raise click.UsageError(str(ex))
+
 
 """
 END
