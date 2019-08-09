@@ -2,7 +2,6 @@ from autobahn import wamp
 from autobahn.twisted.wamp import ApplicationSession
 from twisted.internet.defer import inlineCallbacks
 
-
 class SliceBuilderService(ApplicationSession):
 
     def __init__(self, config=None):
@@ -27,25 +26,27 @@ class SliceBuilderService(ApplicationSession):
 
     @inlineCallbacks
     def _node_register(self, node):
-        _, data = yield self.call("topologyservice.get_node", node['device_id'])
+        def get_device(id):
+            err, data = yield self.call("topologyservice.get_node", id)
+            if err:
+                raise ValueError(data)
+            return data
 
-        device_id, device = data
-        prefix = device['prefix_uri']
-        app = "{p}.add_instance".format(p=prefix)
+        def add_instance(a, l, d, p):
+            err, data = yield self.call(a, label = l, datapath_id = d, protocols = p)
+            if err:
+                raise ValueError(data)
+            return data
+
+        device_id, device = get_device(node['device_id'])
+        app = "{p}.add_instance".format(p = device['prefix_uri'])
 
         label = node['id'][:8]
         protocols = node['protocols']
         datapath_id = node['datapath_id']
 
-        err, ret = yield self.call(app,
-                                   label=label,
-                                   datapath_id=datapath_id,
-                                   protocols=protocols)
-        if err:
-            raise ValueError(ret)
-
+        add_instance(app, label, datapath_id, protocols)
         self._instance_register(device_id, node['id'])
-
 
     @inlineCallbacks
     def onJoin(self, details):
