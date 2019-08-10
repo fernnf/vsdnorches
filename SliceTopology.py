@@ -83,7 +83,7 @@ class TopologyDAO(object):
             raise ValueError("the link {i} was not found".format(i = link_id))
 
     def set_link(self, source_id, target_id, source_portnum, target_portnum, tunnel = None, key = None):
-        if self.has_link(source_id, target_id) is not None:
+        if self.has_link(source_id, target_id):
             raise ValueError("there is a link between <{s},{t}>".format(s = source_id, t = target_id))
 
         link_id = str(uuid4())
@@ -106,12 +106,7 @@ class TopologyDAO(object):
             raise ValueError("the link {i} was not found".format(i = link_id))
 
     def has_link(self, source_id, target_id):
-
-        if self._topo.has_edge(source_id, target_id):
-            proper = self._topo.get_edge_data(source_id, target_id)
-            return proper
-        else:
-            raise ValueError("the link <{s},{t}> was not found".format(s = source_id, t = target_id))
+        return self._topo.has_edge(source_id, target_id)
 
     def get_virt_instances(self, device_id):
         return self._find_virt_nodes(device_id)

@@ -2,6 +2,7 @@ from autobahn import wamp
 from autobahn.twisted.wamp import ApplicationSession
 from twisted.internet.defer import inlineCallbacks
 
+
 class SliceBuilderService(ApplicationSession):
 
     def __init__(self, config=None):
@@ -9,67 +10,58 @@ class SliceBuilderService(ApplicationSession):
         self._slices_registred = {}
 
     @inlineCallbacks
-    def _update_status(self, slice_id, code):
-        err, msg = yield self.call("sliceservice.update_slice_status", slice_id=slice_id, code=code)
-        if err:
-            self.log.error(msg)
-
-    def _slice_register(self, slice):
-        slice_id = slice['graph']['slice_id']
-        self._slices_registred.update({slice_id: slice})
-
-    @inlineCallbacks
-    def _instance_register(self, device_id, virtdev_id):
-        err, ret = yield self.call("topologyservice.set_instance", device_id, virtdev_id)
-        if err:
-            raise ValueError(ret)
-
-    @inlineCallbacks
-    def _node_register(self, node):
-        def get_device(id):
-            err, data = yield self.call("topologyservice.get_node", id)
-            if err:
-                raise ValueError(data)
-            return data
-
-        def add_instance(a, l, d, p):
-            err, data = yield self.call(a, label = l, datapath_id = d, protocols = p)
-            if err:
-                raise ValueError(data)
-            return data
-
-        device_id, device = get_device(node['device_id'])
-        app = "{p}.add_instance".format(p = device['prefix_uri'])
-
-        label = node['id'][:8]
-        protocols = node['protocols']
-        datapath_id = node['datapath_id']
-
-        add_instance(app, label, datapath_id, protocols)
-        self._instance_register(device_id, node['id'])
-
-    @inlineCallbacks
     def onJoin(self, details):
         self.log.info('Slice Builder Service Starting ...')
         yield self.register(self)
         self.log.info('Slice Builder Service Started ...')
 
+    @inlineCallbacks
+    def update_status(self, i, s):
+        app = "sliceservice.update_slice_status"
+        err, msg = yield self.call(app, slice_id=i, code=s)
+        if err:
+            raise ValueError(msg)
+
+    @inlineCallbacks
+    def deploy_node(self, n):
+        lbl = n['id'][:8]
+        dpid = n['datapath_id']
+        prtl = n['protocols']
+        dev = n['device_id']
+
+        app = "topologyservice.get_node"
+        err, gn = yield self.call(app, dev)
+        if err:
+            raise ValueError(gn)
+        _, sw = gn
+
+        uri = "{u}.add_instance".format(u=sw["prefix_uri"])
+        print(uri)
+        err, ret = yield self.call(uri, label=lbl, datapath_id=dpid, protocols=prtl)
+        if err:
+            raise ValueError(ret)
+
     @wamp.register(uri='slicebuilderservice.deploy')
     def deploy(self, slice):
 
+        def register_slice(i, s):
+            self._slices_registred.update({i: s})
+
         nodes = slice['nodes']
+        links = slice['links']
         slice_id = slice['graph']['slice_id']
 
         if len(nodes) == 0:
             self.log.info("No nodes to deploy")
             return False, None
+
         try:
-            self._update_status(slice_id, 2)
+            self.update_status(slice_id, 2)
             for n in nodes:
-                self._node_register(n)
-            self._slice_register(slice)
+                self.deploy_node(n)
+            register_slice(slice_id, slice)
+            self.update_status(slice_id, 6)
             self.log.info("the slice <{i}> was deployed".format(i=slice_id))
-            self._update_status(slice_id, 6)
             return False, None
         except Exception as ex:
             return True, str(ex)

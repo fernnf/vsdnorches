@@ -182,10 +182,9 @@ def show_slice(ctx, slice_id):
             ret = smc.get_slices()
         else:
             ret = smc.get_slice(slice_id)
-
-        print_info(ret[0])
+        print_info(ret)
     except Exception as ex:
-        raise click.UsageError(str(ex))
+        raise click.UsageError(ex)
 
 
 @show_slice.command('node')
