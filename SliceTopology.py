@@ -6,6 +6,8 @@ import networkx.readwrite as nxparser
 from autobahn import wamp
 from autobahn.twisted.wamp import ApplicationSession
 from twisted.internet.defer import inlineCallbacks
+from SliceUtils import return_msg as result
+
 
 PREFIX = "topologyservice"
 
@@ -25,15 +27,6 @@ class TopologyDAO(object):
                     return n
         else:
             return None
-
-    def _find_link(self, id):
-        links = list(self._topo.edges(data = True))
-        for l in links:
-            n1, n2, property = l
-            lid = property["link_id"]
-            if lid.__eq__(id):
-                return l
-        return None
 
     def _find_virt_nodes(self, id):
         node = self.get_node(id)
@@ -66,7 +59,7 @@ class TopologyDAO(object):
         return device_id
 
     def del_node(self, device_id):
-        assert self._topo.has_node(device_id), "Cannot del {i}, node was not found".format(i = device_id)
+        assert not self._topo.has_node(device_id), "Cannot del {i}, node was not found".format(i = device_id)
         self._topo.remove_node(device_id)
 
     def has_node(self, device_id):
@@ -75,12 +68,9 @@ class TopologyDAO(object):
     def get_links(self):
         return list(self._topo.edges(data = True))
 
-    def get_link(self, link_id):
-        link = self._find_link(link_id)
-        if link is not None:
-            return link
-        else:
-            raise ValueError("the link {i} was not found".format(i = link_id))
+    def get_link(self, u, v):
+        data = self._topo.get_edge_data(u, v)
+        return data
 
     def set_link(self, source_id, target_id, source_portnum, target_portnum, tunnel = None, key = None):
         if self.has_link(source_id, target_id):
@@ -95,15 +85,8 @@ class TopologyDAO(object):
                             key = key)
         return link_id
 
-    def del_link(self, link_id):
-        link = self._find_link(link_id)
-
-        if link is not None:
-            source = link[0]
-            target = link[1]
-            self._topo.remove_edge(source, target)
-        else:
-            raise ValueError("the link {i} was not found".format(i = link_id))
+    def del_link(self, source, target):
+        self._topo.remove_edge(source, target)
 
     def has_link(self, source_id, target_id):
         return self._topo.has_edge(source_id, target_id)
@@ -125,12 +108,17 @@ class TopologyDAO(object):
     def get_shortest_path(self, source_id, target_id):
         return nx.shortest_path(self._topo, source_id, target_id)
 
+    def get_shortest_path_length(self, source_id, target_id):
+        return nx.shortest_path_length(self._topo, source_id, target_id)
+
     def get_topology(self):
         return nxparser.node_link_data(self._topo)
 
     @staticmethod
     def from_json(json):
         return nxparser.node_link_graph(json)
+
+
 
 
 class TopologyService(ApplicationSession):
@@ -227,18 +215,18 @@ class TopologyService(ApplicationSession):
             return True, str(ex)
 
     @wamp.register(uri = "topologyservice.del_link")
-    def del_link(self, link_id):
+    def del_link(self, source, target):
         try:
-            self._topo.del_link(link_id)
-            self.log.info("the link <{i}> has removed from topology".format(i = link_id))
+            self._topo.del_link(source, target)
+            #self.log.info("the link <{i}> has removed from topology".format(i = link))
             return False, None
         except Exception as ex:
             return True, str(ex)
 
     @wamp.register(uri = "topologyservice.get_link")
-    def get_link(self, link_id):
+    def get_link(self, source, target):
         try:
-            link = self._topo.get_link(link_id)
+            link = self._topo.get_link(source, target)
             return False, link
         except Exception as ex:
             return True, str(ex)
@@ -287,6 +275,14 @@ class TopologyService(ApplicationSession):
     def get_shortest_path(self, source_id, target_id):
         try:
             path = self._topo.get_shortest_path(source_id, target_id)
+            return False, path
+        except Exception as ex:
+            return True, str(ex)
+
+    @wamp.register(uri="topologyservice.get_shortest_path_length")
+    def get_shortest_path(self, source_id, target_id):
+        try:
+            path = self._topo.get_shortest_path_length(source_id, target_id)
             return False, path
         except Exception as ex:
             return True, str(ex)

@@ -37,6 +37,7 @@ def create_slice():
 
 
 def deploy_slice(s):
+    print(s)
     smc = SliceManagerClient()
     smc.deploy_slice(s)
 
@@ -72,11 +73,17 @@ def config_links(src, dst):
     dst_node = get_id_node(dst)
     tsc.set_link(src_node, dst_node, "2", "2", tunnel="Ethernet", key=None)
 
+def update_status(slice_id, code):
+    smc = SliceManagerClient()
+    smc.update_slice_status(slice_id, code)
 
 if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     coloredlogs.install(logger=logger)
     config_links("0000000000000001", "0000000000000002")
     slice = create_slice()
-    deploy_slice(slice[0])
-    #
+    print(slice)
+    slice_id, _, _, _ = slice
+    update_status(slice_id, code=2)
+    #deploy_slice(slice_id)
+

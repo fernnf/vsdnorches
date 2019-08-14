@@ -2,6 +2,7 @@ from gevent import monkey
 
 monkey.patch_all()
 
+import json
 from wampy import Client
 
 
@@ -12,10 +13,10 @@ class SliceManagerClient(object):
 
     def _call_connection(self, app, **kwargs):
         with Client(url=self.url, realm=self.realm) as client:
-            err, msg = client.call(app, **kwargs)
-            if err:
-                raise ValueError(msg)
-        return msg
+            ret = json.loads(client.call(app, **kwargs))
+            if ret['error']:
+                raise ValueError(ret['result'])
+        return ret['result']
 
     def deploy_slice(self, slice_id):
         app = "sliceservice.deploy_slice"
@@ -83,6 +84,9 @@ class SliceManagerClient(object):
         app = "sliceservice.get_slice_status"
         return self._call_connection(app, slice_id=slice_id)
 
+    def update_slice_status(self,slice_id, code):
+        app = 'sliceservice.update_slice_status'
+        return self._call_connection(app, slice_id=slice_id, code=code)
 
 class TopologyServiceClient(object):
     def __init__(self, url='ws://127.0.0.1:8080/ws', realm='realm1'):

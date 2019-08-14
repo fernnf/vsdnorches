@@ -5,7 +5,10 @@ import networkx as nx
 import networkx.readwrite as nxparser
 from autobahn import wamp
 from autobahn.twisted.wamp import ApplicationSession
-from twisted.internet.defer import inlineCallbacks
+from autobahn.wamp.exception import ApplicationError
+from twisted.internet.defer import inlineCallbacks, returnValue
+
+from SliceUtils import return_msg as result
 
 
 class SliceTopologyDAO(object):
@@ -104,10 +107,20 @@ class SliceTopologyDAO(object):
         assert self._slice_top.has_node(src_virtdev_id), "the node {i} was not found".format(i=src_virtdev_id)
         assert self._slice_top.has_node(dst_virtdev_id), "the node {i} was not found".format(i=dst_virtdev_id)
 
+        def get_next(u):
+            gen = self._slice_top.neighbors(u)
+            nb = len([n for n in gen])
+            return nb + 1
+
         link_id = str(uuid4())
+
+        ingress = get_next(src_virtdev_id)
+        egress = get_next(dst_virtdev_id)
 
         self._slice_top.add_edge(src_virtdev_id,
                                  dst_virtdev_id,
+                                 ingress=ingress,
+                                 egress=egress,
                                  link_id=link_id,
                                  type=type,
                                  tunnel=tunnel,
@@ -160,6 +173,27 @@ class SliceManagerService(ApplicationSession):
         super(SliceManagerService, self).__init__(*args, **kwargs)
         self._slices = {}
 
+    def onUserError(self, fail, msg):
+        print(fail)
+        print(msg)
+        self.log.err("")
+
+    @inlineCallbacks
+    def _send_call(self, uri, *args, **kwargs):
+        err, ret = yield self.call(uri, *args, **kwargs)
+        if err:
+            raise ValueError(ret)
+        returnValue(ret)
+
+    def _deploy_builder(self, slice):
+        uri = "slicebuilderservice.deploy"
+        self._send_call(uri, slice=slice.get_slice())
+
+    def _has_device_topo(self, device_id):
+        uri = "topologyservice.has_node"
+        data = self._send_call(uri, device_id=device_id)
+        return data
+
     @inlineCallbacks
     def onJoin(self, details):
         self.log.info("Slice Service Starting ...")
@@ -168,44 +202,25 @@ class SliceManagerService(ApplicationSession):
 
     @wamp.register(uri="sliceservice.update_slice_status")
     def update_slice_status(self, slice_id, code):
-        """
-        :param msg: a json file with the following data:
-
-        {
-            message: update,
-            slice_id: string,
-            status_code: int ( value range [0,1,2,3,4,5])
-        }
-        :return: no return
-        """
-        try:
-            slice = self._slices.get(slice_id, None)
-            print(code)
-            if slice is None:
-                return True, "the slice <{i}> was not found".format(i=slice_id)
-
-            slice.set_slice_status(code)
-            return False, None
-
-        except Exception as ex:
-            return True, str(ex)
-
-    @inlineCallbacks
-    @wamp.register(uri="sliceservice.deploy_slice")
-    def deploy_slice(self, slice_id):
-        def deploy_builder(s):
-            app = "slicebuilderservice.deploy"
-            ret = yield self.call(app, slice=s.get_slice())
-            return ret
-
         slice = self._slices.get(slice_id, None)
         if slice is None:
-            return True, "the slice <{i}> was not found".format(i=slice_id)
+            raise ApplicationError('sliceservice.error.slice_not_found')
         try:
-            ret = deploy_builder(slice)
-            return ret
+            slice.set_slice_status(code)
         except Exception as ex:
-            return True, str(ex)
+            raise ApplicationError('sliceservice.error.set_status')
+
+    @wamp.register(uri="sliceservice.deploy_slice")
+    def deploy_slice(self, slice_id):
+        slice = self._slices.get(slice_id, None)
+
+        if slice is None:
+            return result(error=True, msg="the slice <{i}> was not found".format(i=slice_id))
+        try:
+            self._deploy_builder(slice)
+            return result(msg=None)
+        except Exception as ex:
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.set_slice")
     def set_slice(self, tenant_id, label, controller):
@@ -222,9 +237,10 @@ class SliceManagerService(ApplicationSession):
             slice_id = slice.get_slice_id()
             self._slices.update({slice_id: slice})
             self.log.info("new slice <{i}> has created ".format(i=slice_id))
-            return False, slice_id
+
+            return result(msg=slice_id)
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.del_slice")
     def del_slice(self, slice_id):
@@ -249,23 +265,21 @@ class SliceManagerService(ApplicationSession):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "slice <{i}> not found"
+                return result(error=True, msg="slice <{i}> not found".format(i=slice_id))
             delete()
-            return False, None
+            return result(msg=None)
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.get_slice")
     def get_slice(self, slice_id):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice <{i}> was not found".format(i=slice_id)
-
-            return False, slice.get_slice()
-
+                return result(error=True, msg="the slice <{i}> was not found".format(i=slice_id))
+            return result(msg=slice.get_slice())
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.get_slices")
     def get_slices(self):
@@ -273,35 +287,28 @@ class SliceManagerService(ApplicationSession):
         if len(self._slices) > 0:
             for s in self._slices.values():
                 slices.append(s.get_slice())
-            return False, slices
+            return result(msg=slices)
         else:
-            return True, "there is no slices"
-
-    @inlineCallbacks
-    def has_device_topo(self, device_id):
-        err, data = yield self.call("topologyservice.has_node", device_id)
-        if err:
-            raise ValueError(data)
-        return data
+            return result(error=True, msg="there is no slices")
 
     @wamp.register(uri="sliceservice.set_slice_node")
     def set_slice_node(self, slice_id, device_id, datapath_id, label, protocols):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice <{i}> was not found".format(i=slice_id)
+                return result(error=True, msg="the slice <{i}> was not found".format(i=slice_id))
 
-            if self.has_device_topo(device_id):
+            if self._has_device_topo(device_id):
                 virtdev_id = slice.set_slice_node(device_id=device_id,
                                                   datapath_id=datapath_id,
                                                   label=label,
                                                   protocols=protocols)
-                return False, virtdev_id
+                return result(msg=virtdev_id)
             else:
-                return True, "the device-id <{i}> was not found on topology".format(i=device_id)
+                return result(msg="the device-id <{i}> was not found on topology".format(i=device_id), error=True)
 
         except Exception as ex:
-            return True, str(ex)
+            return result(msg=str(ex), error=True)
 
     @wamp.register(uri="sliceservice.del_slice_node")
     def del_slice_node(self, slice_id, virtdev_id):
@@ -351,54 +358,54 @@ class SliceManagerService(ApplicationSession):
                                                dst_virtdev_id=dst_virtdev_id,
                                                tunnel=tunnel,
                                                key=key)
-            return False, virtlink_id
+            return result(error=False, msg=virtlink_id)
         except  Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.del_slice_link")
     def del_slice_link(self, slice_id, virtlink_id):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice {i} was not found".format(i=slice_id)
+                return result(error=True, msg="the slice {i} was not found".format(i=slice_id))
 
             slice.del_slice_link(virtlink_id)
-            return False, None
+            return result(error=False, msg=None)
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.get_slice_link")
     def get_slice_link(self, slice_id, virtlink_id):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice {i} was not found".format(i=slice_id)
+                return result(error=True, msg="the slice {i} was not found".format(i=slice_id))
 
             link = slice.get_slice_link(virtlink_id)
-            return False, link
+            return result(error=False, msg=link)
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.get_slice_links")
     def get_slice_links(self, slice_id):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice {i} was not found".format(i=slice_id)
+                return result(error=True, msg="the slice {i} was not found".format(i=slice_id))
 
             link = slice.get_slice_links()
-            return False, link
+            return result(error=False, msg=link)
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
 
     @wamp.register(uri="sliceservice.get_slice_status")
     def get_slice_status(self, slice_id):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
-                return True, "the slice {i} was not found".format(i=slice_id)
+                return result(error=True, msg="the slice {i} was not found".format(i=slice_id))
 
             status = slice.get_slice_status()
-            return False, status
+            return result(error=False, msg=status)
         except Exception as ex:
-            return True, str(ex)
+            return result(error=True, msg=str(ex))
