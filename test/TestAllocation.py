@@ -82,8 +82,7 @@ if __name__ == '__main__':
     coloredlogs.install(logger=logger)
     config_links("0000000000000001", "0000000000000002")
     slice = create_slice()
-    print(slice)
     slice_id, _, _, _ = slice
     update_status(slice_id, code=2)
-    #deploy_slice(slice_id)
+    deploy_slice(slice_id)
 
