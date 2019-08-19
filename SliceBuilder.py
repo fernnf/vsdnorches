@@ -1,9 +1,8 @@
-import json
-from autobahn.wamp.exception import ApplicationError
 from autobahn import wamp
 from autobahn.twisted.wamp import ApplicationSession
-from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.python.failure import Failure
+from autobahn.wamp.exception import ApplicationError
+from twisted.internet.defer import inlineCallbacks
+
 
 class SliceBuilderService(ApplicationSession):
 
@@ -11,162 +10,6 @@ class SliceBuilderService(ApplicationSession):
         super().__init__(config=config)
         self._slices_registred = {}
 
-    """
-    @inlineCallbacks
-    def _send_call(self, uri, *args, **kwargs):
-        ret = yield self.call(uri, *args, **kwargs)
-        if ret['error']:
-            raise ValueError(ret['result'])
-        returnValue(json.loads(ret))
-
-    @inlineCallbacks
-    def _add_vnode(self, prefix, label, datapath_id, protocols):
-        uri = "{p}.add_instance".format(p=prefix)
-        yield self._send_call(uri, label=label, datapath_id=datapath_id, protocols=protocols)
-
-    @inlineCallbacks
-    def _rem_vnode(self, prefix, label):
-        uri = "{p}.rem_instance".format(p=prefix)
-        yield self._send_call(uri, label=label)
-
-    @inlineCallbacks
-    def _add_vport(self, prefix, label, portnum, realport, vlan_id):
-        uri = "{p}.add_vport".format(p=prefix)
-        yield self._send_call(uri, label=label, portnum=portnum, realport=realport, vlan_id=vlan_id)
-
-    @inlineCallbacks
-    def _rem_vport(self, prefix, portnum):
-        uri = "{p}.rem_vport".format(p=prefix)
-        yield self._send_call(uri, portnum=portnum)
-
-    @inlineCallbacks
-    def _add_bypass(self, prefix, in_realport, out_realport, vlan_id):
-        uri = "{p}.add_by_pass".format(p=prefix)
-        yield self._send_call(uri, in_realport=in_realport, out_realport=out_realport, vlan_id=vlan_id)
-
-    @inlineCallbacks
-    def _rem_bypass(self, prefix, in_realport, out_realport, vlan_id):
-        uri = "{p}.rem_by_pass".format(p=prefix)
-        yield self._send_call(uri, in_realport=in_realport, out_realport=out_realport, vlan_id=vlan_id)
-
-    @inlineCallbacks
-    def _set_controller(self, prefix, label, controller):
-        uri = "{p}.set_controller".format(p=prefix)
-        yield self._send_call(uri, label=label, controller=controller)
-
-    @inlineCallbacks
-    def _del_controller(self, prefix, label):
-        uri = "{p}.del_controller".format(p=prefix)
-        yield self._send_call(uri, label=label)
-
-    @inlineCallbacks
-    def _update_slice_status(self, slice_id, status):
-        uri = "sliceservice.update_slice_status"
-        try:
-            yield self.call(uri, slice_id=slice_id, code=status)
-        except ApplicationError as ex:
-            self.log.error("Error:{}".format(ex.error))
-
-
-    @inlineCallbacks
-    def _get_prefix_node(self, device_id):
-        uri = "topologyservice.get_node"
-        err, phy_node = yield self.call(uri, device_id=device_id)
-        if err:
-            raise ValueError(phy_node)
-        p = phy_node[1]['prefix_uri']
-        returnValue(p)
-
-    def _get_label(self, vid):
-        return vid[:8]
-
-    @inlineCallbacks
-    def _deploy_node(self, n):
-
-        label = self._get_label(n['id'])
-        datapath_id = n['datapath_id']
-        device_id = n['device_id']
-        protocols = n['protocols']
-        prefix = yield self._get_prefix_node(device_id)
-
-        yield self._add_vnode(prefix=prefix,
-                              label=label,
-                              datapath_id=datapath_id,
-                              protocols=protocols)
-
-    @inlineCallbacks
-    def _withdrawn_node(self, n):
-        label = self._get_label(n['id'])
-        device_id = n['device_id']
-
-        prefix = yield self._get_prefix_node(device_id)
-        self._rem_vnode(prefix, label=label)
-
-    @inlineCallbacks
-    def _deploy_link(self, s, l):
-
-        @inlineCallbacks
-        def get_slice_node(sid, vdid):
-            uri = "sliceservice.get_slice_node"
-            ret = yield self._send_call(uri, slice_id=sid, virtdev_id=vdid)
-            returnValue(ret[1])
-
-        @inlineCallbacks
-        def get_phy_link(u, v):
-            uri = "topologyservice.get_link"
-            ret = yield self._send_call(uri, source=u, target=v)
-            returnValue(ret)
-
-        @inlineCallbacks
-        def has_phy_link(u, v):
-            uri = "topologyservice.has_link"
-            ret = yield self._send_call(uri, source_id=u, target_id=v)
-            returnValue(ret)
-
-        @inlineCallbacks
-        def add_p2p_link(virt_src, virt_dst):
-            phy_src_id = virt_dst['device_id']
-            phy_dst_id = virt_src['device_id']
-
-            phy_link = yield get_phy_link(phy_src_id, phy_dst_id)
-            print(phy_link)
-            key = l['key']
-
-            virt_label_src = self._get_label(l['source'])
-            virt_port_ingress = l['ingress']
-            real_port_ingress = phy_link['ingress']
-            prefix_ingress = yield self._get_prefix_node(phy_src_id)
-
-            yield self._add_vport(prefix_ingress, virt_label_src, virt_port_ingress, real_port_ingress, key)
-
-            virt_label_tgt = self._get_label(l['target'])
-            virt_port_egress = l['egress']
-            real_port_egress = phy_link['egress']
-            prefix_egress = yield self._get_prefix_node(phy_dst_id)
-
-            yield self._add_vport(prefix_egress, virt_label_tgt, virt_port_egress, real_port_egress, key)
-
-        def add_bypass(virt_src, virt_dst):
-            pass
-
-        virt_src = yield get_slice_node(s, l['source'])
-        virt_dst = yield get_slice_node(s, l['target'])
-
-        phy_src_id = virt_dst['device_id']
-        phy_dst_id = virt_src['device_id']
-        print("before if")
-
-        if has_phy_link(phy_src_id, phy_dst_id):
-            yield add_p2p_link(virt_src, virt_dst)
-        else:
-            yield add_bypass(virt_src, virt_dst)
-
-    def _register_slice(self, sid, slice):
-        self._slices_registred.update({sid: slice})
-
-    def _unregister_slice(self, sid):
-        self._slices_registred.pop(sid)
-    """
     @inlineCallbacks
     def onJoin(self, details):
         self.log.info('Slice Builder Service Starting ...')
@@ -199,8 +42,23 @@ class SliceBuilderService(ApplicationSession):
                             datapath_id=datapath_id,
                             protocols=protocols)
 
+            hosts = n['hosts']
+
+            if len(hosts) > 0:
+                for h in hosts.values():
+                    vlan_id = h['vlan_id']
+                    phy_portnum = h['phy_portnum']
+                    virt_portnum = h['virt_portnum']
+                    cmd = '{}.add_vport'.format(switch['prefix_uri'])
+
+                    yield self.call(cmd,
+                                    vswitch=name,
+                                    vlan_id=vlan_id,
+                                    source_portnum=virt_portnum,
+                                    phy_portnum=phy_portnum)
+
         @inlineCallbacks
-        def deploy_link(s,l):
+        def deploy_link(s, l):
 
             vlan_id = l['key']
 
@@ -215,7 +73,8 @@ class SliceBuilderService(ApplicationSession):
             src_sw_id, src_sw = yield self.call("topologyservice.get_node", device_id=src_vsw['device_id'])
             tgt_sw_id, tgt_sw = yield self.call("topologyservice.get_node", device_id=tgt_vsw['device_id'])
 
-            ret = yield self.call("topologyservice.has_link", source_id=src_vsw['device_id'], target_id=tgt_vsw['device_id'])
+            ret = yield self.call("topologyservice.has_link", source_id=src_vsw['device_id'],
+                                  target_id=tgt_vsw['device_id'])
             print(ret)
             if ret:
                 phy_link = yield self.call("topologyservice.get_link", source=src_sw_id, target=tgt_sw_id)
@@ -237,7 +96,6 @@ class SliceBuilderService(ApplicationSession):
                                 source_portnum=target_portnum,
                                 phy_portnum=target_phy_portnum)
 
-
         nodes = slice['nodes']
         links = slice['links']
         slice_id = slice['graph']['slice_id']
@@ -253,29 +111,6 @@ class SliceBuilderService(ApplicationSession):
         except Exception as ex:
             error = 'slicebuilderservice.error.deploy'
             raise ApplicationError(error, msg=str(ex))
-
-
-    """
-        nodes = slice['nodes']
-        links = slice['links']
-        slice_id = slice['graph']['slice_id']
-
-        if len(nodes) == 0:
-            self.log.info("No nodes to deploy")
-            return False, None
-        try:
-            self._update_slice_status(slice_id, 9)
-            #for n in nodes:
-            #    self._deploy_node(n)
-            #for l in links:
-            #    self._deploy_link(slice_id, l)
-            self._register_slice(slice_id, slice)
-            self._update_slice_status(slice_id, 6)
-            self.log.info("the slice <{i}> was deployed".format(i=slice_id))
-            return False, None
-        except Exception as ex:
-            return True, str(ex)
-    """
 
     @wamp.register(uri='slicebuilderservice.start')
     def start(self):

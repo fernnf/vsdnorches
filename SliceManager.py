@@ -1,4 +1,3 @@
-import json
 from enum import Enum
 from uuid import uuid4
 
@@ -8,9 +7,6 @@ from autobahn import wamp
 from autobahn.twisted.wamp import ApplicationSession
 from autobahn.wamp.exception import ApplicationError
 from twisted.internet.defer import inlineCallbacks, returnValue
-from twisted.python.failure import Failure
-
-from SliceUtils import return_msg as result
 
 
 class SliceTopologyDAO(object):
@@ -82,7 +78,8 @@ class SliceTopologyDAO(object):
                                  datapath_id=datapath_id,
                                  type=type,
                                  label=label,
-                                 protocols=protocols)
+                                 protocols=protocols,
+                                 hosts={})
 
         return virtdev_id
 
@@ -105,7 +102,29 @@ class SliceTopologyDAO(object):
         assert self._slice_top.has_node(virtdev_id), "the node {i} was not found".format(i=virtdev_id)
         self._slice_top.remove_node(virtdev_id)
 
-    def set_slice_link(self, src_virtdev_id, dst_virtdev_id, type="virtual_link", tunnel="vlan", key=None):
+    def set_slice_host(self, virtdev_id, vlan_id, phy_portnum):
+        assert self._slice_top.has_node(virtdev_id), "the node {i} was not found".format(i=virtdev_id)
+
+        def get_next():
+            node = self.get_slice_node(virtdev_id)
+            next = 60 + len(node['hosts'])
+            return next
+
+        host = {'virtdev_id': virtdev_id, 'vlan_id': vlan_id, 'phy_portnum': phy_portnum, 'virt_portnum': get_next()}
+        node = self.get_slice_node(virtdev_id)
+        node['hosts'].update({host['virt_portnum']: host})
+
+    def del_slice_host(self, virtdev_id, virt_portnum):
+        assert self._slice_top.has_node(virtdev_id), "the node {i} was not found".format(i=virtdev_id)
+        node = self.get_slice_node(virtdev_id)
+        node['hosts'].pop(virt_portnum)
+
+    def get_slice_hosts(self, virtdev_id):
+        assert self._slice_top.has_node(virtdev_id), "the node {i} was not found".format(i=virtdev_id)
+        node = self.get_slice_node(virtdev_id)
+        return node['hosts'].copy()
+
+    def set_slice_link(self, src_virtdev_id, dst_virtdev_id, type="virtual_link", tunnel="vlan"):
         assert self._slice_top.has_node(src_virtdev_id), "the node {i} was not found".format(i=src_virtdev_id)
         assert self._slice_top.has_node(dst_virtdev_id), "the node {i} was not found".format(i=dst_virtdev_id)
 
@@ -115,7 +134,7 @@ class SliceTopologyDAO(object):
             return nb + 1
 
         link_id = str(uuid4())
-
+        key = self.get_slice_tenant_id()
         ingress = get_next(src_virtdev_id)
         egress = get_next(dst_virtdev_id)
 
@@ -175,6 +194,12 @@ class SliceManagerService(ApplicationSession):
         super(SliceManagerService, self).__init__(*args, **kwargs)
         self._slices = {}
 
+    def _check_tenant(self, value):
+        for k, s in self._slices.items():
+            tid = s.get_slice_tenant_id()
+            if tid == value:
+                raise ValueError("Tenant already has been used")
+
     @inlineCallbacks
     def _deploy_builder(self, slice):
         uri = "slicebuilderservice.deploy"
@@ -220,6 +245,7 @@ class SliceManagerService(ApplicationSession):
     @wamp.register(uri="sliceservice.set_slice")
     def set_slice(self, tenant_id, label, controller):
         try:
+            self._check_tenant(tenant_id)
             slice = SliceTopologyDAO(tenant_id=tenant_id,
                                      label=label,
                                      controller=controller)
@@ -351,8 +377,50 @@ class SliceManagerService(ApplicationSession):
             error = "sliceservice.error.get_slice_nodes"
             raise ApplicationError(error, msg=str(ex))
 
+    @wamp.register(uri="sliceservice.set_slice_host")
+    def set_slice_host(self, slice_id, virtdev_id, vlan_id, phy_portnum):
+        try:
+            slice = self._slices.get(slice_id, None)
+            if slice is None:
+                error = "sliceservice.error.set_slice_link.slice_not_found"
+                raise ApplicationError(error)
+            slice.set_slice_host(virtdev_id=virtdev_id,
+                                 vlan_id=vlan_id,
+                                 phy_portnum=phy_portnum)
+
+        except Exception as ex:
+            error = "sliceservice.error.set_slice_host"
+            raise ApplicationError(error, msg=str(ex))
+
+    @wamp.register(uri="sliceservice.del_slice_host")
+    def del_slice_host(self, slice_id, virtdev_id, virt_portnum):
+        try:
+            slice = self._slices.get(slice_id, None)
+            if slice is None:
+                error = "sliceservice.error.set_slice_link.slice_not_found"
+                raise ApplicationError(error)
+            slice.del_slice_host(virtdev_id=virtdev_id, virt_portnum=virt_portnum)
+
+        except Exception as ex:
+            error = "sliceservice.error.del_slice_host"
+            raise ApplicationError(error, msg=str(ex))
+
+    @wamp.register(uri="sliceservice.get_slice_hosts")
+    def get_slice_hosts(self, slice_id, virtdev_id):
+        try:
+            slice = self._slices.get(slice_id, None)
+            if slice is None:
+                error = "sliceservice.error.set_slice_link.slice_not_found"
+                raise ApplicationError(error)
+            hosts = slice.get_slice_hosts(virtdev_id=virtdev_id)
+            return hosts
+
+        except Exception as ex:
+            error = "sliceservice.error.get_slice_host"
+            raise ApplicationError(error, msg=str(ex))
+
     @wamp.register(uri="sliceservice.set_slice_link")
-    def set_slice_link(self, slice_id, src_virtdev_id, dst_virtdev_id, tunnel, key):
+    def set_slice_link(self, slice_id, src_virtdev_id, dst_virtdev_id, tunnel):
         try:
             slice = self._slices.get(slice_id, None)
             if slice is None:
@@ -361,8 +429,7 @@ class SliceManagerService(ApplicationSession):
 
             virtlink_id = slice.set_slice_link(src_virtdev_id=src_virtdev_id,
                                                dst_virtdev_id=dst_virtdev_id,
-                                               tunnel=tunnel,
-                                               key=key)
+                                               tunnel=tunnel)
             return virtlink_id
         except Exception as ex:
             error = "sliceservice.error.set_slice_link"

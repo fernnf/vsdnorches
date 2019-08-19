@@ -64,7 +64,8 @@ class SliceManagerClient(object):
     def del_slice_node(self, slice_id, virtdev_id):
         app = "sliceservice.del_slice_node"
         with Client(url=self.url, realm=self.realm) as client:
-            client.call(app, slice_id=slice_id, virtdev_id=virtdev_id)
+            ret = client.call(app, slice_id=slice_id, virtdev_id=virtdev_id)
+            check_error(ret)
 
     def get_slice_node(self, slice_id, virtdev_id):
         app = "sliceservice.get_slice_node"
@@ -79,6 +80,24 @@ class SliceManagerClient(object):
             ret = client.call(app, slice_id=slice_id)
             check_error(ret)
             return ret
+
+    def set_slice_host(self, slice_id, virtdev_id, vlan_id, phy_portnum):
+        app = 'sliceservice.set_slice_host'
+        with Client(url=self.url, realm=self.realm) as client:
+            ret = client.call(app,slice_id=slice_id, virtdev_id=virtdev_id, vlan_id=vlan_id, phy_portnum=phy_portnum)
+            check_error(ret)
+
+    def del_slice_host(self, slice_id, virtdev_id, virt_portnum):
+        app = 'sliceservice.del_slice_host'
+        with Client(url=self.url, realm=self.realm) as client:
+            ret = client.call(app, slice_id=slice_id, virtdev_id=virtdev_id, virt_portnum=virt_portnum)
+            check_error(ret)
+
+    def get_slice_hosts(self, slice_id, virtdev_id):
+        app = 'sliceservice.get_slice_hosts'
+        with Client(url=self.url, realm=self.realm) as client:
+            ret = client.call(app, slice_id=slice_id, virtdev_id=virtdev_id)
+            check_error(ret)
 
     def set_slice_link(self, slice_id, src_virtdev_id, dst_virtdev_id, tunnel, key):
         app = "sliceservice.set_slice_link"
