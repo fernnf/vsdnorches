@@ -1,8 +1,16 @@
 import logging
 
-import coloredlogs as coloredlogs
-
 from SliceClients import SliceManagerClient, TopologyServiceClient
+
+
+def get_id_node(dpid):
+    tsc = TopologyServiceClient()
+    nodes = tsc.get_nodes()
+    for n in nodes:
+        id, data = n
+        if data['datapath_id'] == dpid:
+            return id
+    return None
 
 
 def create_slice():
@@ -36,53 +44,5 @@ def create_slice():
     return slice, vsw1, vsw2, vlink
 
 
-def deploy_slice(s):
-    print(s)
-    smc = SliceManagerClient()
-    smc.deploy_slice(s)
-
-
-def del_slice(s, n1, n2):
-    smc = SliceManagerClient()
-
-    def del_nodes():
-        smc.del_slice_node(slice_id=s, virtdev_id=n1)
-        smc.del_slice_node(slice_id=s, virtdev_id=n2)
-
-    def del_slice():
-        smc.del_slice(slice_id=s)
-
-    del_nodes()
-    del_slice()
-    logger.info("deleted slice <{i}>".format(i=s))
-
-
-def get_id_node(dpid):
-    tsc = TopologyServiceClient()
-    nodes = tsc.get_nodes()
-    for n in nodes:
-        id, data = n
-        if data['datapath_id'] == dpid:
-            return id
-    return None
-
-
-def config_links(src, dst):
-    tsc = TopologyServiceClient()
-    src_node = get_id_node(src)
-    dst_node = get_id_node(dst)
-    tsc.set_link(src_node, dst_node, "2", "2", tunnel="Ethernet", key=None)
-
-def update_status(slice_id, code):
-    smc = SliceManagerClient()
-    smc.update_slice_status(slice_id, code)
-
 if __name__ == '__main__':
     logger = logging.getLogger(__name__)
-    coloredlogs.install(logger=logger)
-    config_links("0000000000000001", "0000000000000002")
-    slice = create_slice()
-    slice_id, _, _, _ = slice
-    update_status(slice_id, code=2)
-    deploy_slice(slice_id)
-

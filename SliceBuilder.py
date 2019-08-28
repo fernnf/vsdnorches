@@ -22,6 +22,10 @@ class SliceBuilderService(ApplicationSession):
     @wamp.register(uri='slicebuilderservice.deploy')
     def deploy(self, slice):
 
+        def register_slice(i,s):
+            self._slices_registred.update({i: s})
+
+
         @inlineCallbacks
         def update_status(id, code):
             app = "sliceservice.update_slice_status"
@@ -106,6 +110,7 @@ class SliceBuilderService(ApplicationSession):
                 deploy_vswitch(n)
             for l in links:
                 deploy_link(slice_id, l)
+            register_slice(slice_id, slice)
             update_status(slice_id, 6)
 
         except Exception as ex:
@@ -121,5 +126,5 @@ class SliceBuilderService(ApplicationSession):
         pass
 
     @wamp.register(uri='slicebuilderservice.remove')
-    def remove(self):
+    def remove(self, slice_id):
         pass

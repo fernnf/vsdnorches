@@ -10,7 +10,7 @@ from wampy.messages.error import Error as error
 
 def check_error(ret):
     if isinstance(ret, error):
-        raise Exception("ERROR: {}:{}".format(ret.error, ret.kwargs_dict['msg']))
+        raise Exception("ERROR: {}:{}".format(ret.error, ret.message))
 
 
 class SliceManagerClient(object):
@@ -99,15 +99,14 @@ class SliceManagerClient(object):
             ret = client.call(app, slice_id=slice_id, virtdev_id=virtdev_id)
             check_error(ret)
 
-    def set_slice_link(self, slice_id, src_virtdev_id, dst_virtdev_id, tunnel, key):
+    def set_slice_link(self, slice_id, src_virtdev_id, dst_virtdev_id, tunnel):
         app = "sliceservice.set_slice_link"
         with Client(url=self.url, realm=self.realm) as client:
             ret = client.call(app,
                               slice_id=slice_id,
                               src_virtdev_id=src_virtdev_id,
                               dst_virtdev_id=dst_virtdev_id,
-                              tunnel=tunnel,
-                              key=key)
+                              tunnel=tunnel)
             check_error(ret)
             return ret
 
