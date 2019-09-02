@@ -14,6 +14,7 @@ def get_id_node(dpid):
 
 
 def create_slice():
+
     smc = SliceManagerClient()
 
     def create():

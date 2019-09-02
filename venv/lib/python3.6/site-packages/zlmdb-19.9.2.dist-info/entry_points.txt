@@ -1,0 +1,3 @@
+[console_scripts]
+zlmdb = zlmdb.cli:main
+

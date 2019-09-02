@@ -1,0 +1,169 @@
+Metadata-Version: 2.1
+Name: crossbar
+Version: 19.7.1
+Summary: Crossbar.io multi-protocol (WAMP/WebSocket, REST/HTTP, MQTT) application router for microservices.
+Home-page: http://crossbar.io/
+Author: Crossbar.io Technologies GmbH
+License: AGPL3
+Keywords: crossbar router autobahn autobahn.ws websocket realtime rfc6455 wamp rpc pubsub oracle postgres postgresql
+Platform: Any
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: No Input/Output (Daemon)
+Classifier: Environment :: Console
+Classifier: Framework :: Twisted
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Internet
+Classifier: Topic :: Internet :: WWW/HTTP :: HTTP Servers
+Classifier: Topic :: Communications
+Classifier: Topic :: Database
+Classifier: Topic :: Home Automation
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Application Frameworks
+Classifier: Topic :: Software Development :: Embedded Systems
+Classifier: Topic :: Software Development :: Object Brokering
+Classifier: Topic :: System :: Distributed Computing
+Classifier: Topic :: System :: Networking
+Requires-Dist: attrs (>=17.2.0)
+Requires-Dist: autobahn[asyncio,compress,encryption,scram,serialization,twisted] (>=19.7.2)
+Requires-Dist: bitstring (>=3.1.5)
+Requires-Dist: bcrypt (>=3.1.6)
+Requires-Dist: cbor (>=1.0.0)
+Requires-Dist: click (>=6.7)
+Requires-Dist: constantly (>=15.1.0)
+Requires-Dist: cryptography (>=2.6.1)
+Requires-Dist: h2 (<4.0,>=3.0)
+Requires-Dist: idna (<2.6,>=2.5)
+Requires-Dist: incremental (>=17.5.0)
+Requires-Dist: jinja2 (>=2.10.1)
+Requires-Dist: lmdb (>=0.92)
+Requires-Dist: mistune (>=0.7.4)
+Requires-Dist: netaddr (>=0.7.19)
+Requires-Dist: passlib (>=1.7.1)
+Requires-Dist: priority (>=1.3.0)
+Requires-Dist: psutil (>=5.2.2)
+Requires-Dist: py-ubjson (>=0.9.0)
+Requires-Dist: pyasn1-modules (>=0.2.4)
+Requires-Dist: pyasn1 (>=0.4.5)
+Requires-Dist: pygments (>=2.2.0)
+Requires-Dist: pynacl (>=1.1.2)
+Requires-Dist: pyopenssl (>=17.1.0)
+Requires-Dist: pyqrcode (>=1.2.1)
+Requires-Dist: pytrie (>=0.3)
+Requires-Dist: pyyaml (>=4.2b4)
+Requires-Dist: sdnotify (>=0.3.1)
+Requires-Dist: service-identity (>=17.0.0)
+Requires-Dist: setproctitle (>=1.1.10)
+Requires-Dist: setuptools (>=36.2.7)
+Requires-Dist: treq (>=17.3.1)
+Requires-Dist: txaio (>=18.8.1)
+Requires-Dist: txtorcon (>=0.19.3)
+Requires-Dist: u-msgpack-python (>=2.4.1)
+Requires-Dist: urllib3 (<1.25,>=1.21.1)
+Requires-Dist: watchdog (>=0.8.3)
+Requires-Dist: zlmdb (>=19.6.1)
+Requires-Dist: zope.interface (>=4.4.2)
+Provides-Extra: dev
+Requires-Dist: tox ; extra == 'dev'
+Requires-Dist: flake8 ; extra == 'dev'
+Requires-Dist: mock ; extra == 'dev'
+Requires-Dist: wheel ; extra == 'dev'
+Requires-Dist: hashin ; extra == 'dev'
+Requires-Dist: coverage ; extra == 'dev'
+Requires-Dist: bandit ; extra == 'dev'
+Requires-Dist: towncrier ; extra == 'dev'
+Requires-Dist: pyenchant (>=2.0.0) ; extra == 'dev'
+Requires-Dist: pygments (>=2.2.0) ; extra == 'dev'
+Requires-Dist: scour (>=0.37) ; extra == 'dev'
+Requires-Dist: sphinx (<2,>=1.8.1) ; extra == 'dev'
+Requires-Dist: sphinx-rtd-theme (>=0.4.2) ; extra == 'dev'
+Requires-Dist: sphinxcontrib-images (>=0.8.0) ; extra == 'dev'
+Requires-Dist: sphinxcontrib-spelling (>=4.2.0) ; extra == 'dev'
+Requires-Dist: sphinxcontrib-websupport (>=1.1.0) ; extra == 'dev'
+
+Crossbar.io
+===========
+
+`Crossbar.io <http://crossbar.io>`__ is an open source networking platform for distributed and microservice applications. It implements the open Web Application Messaging Protocol (WAMP), is feature rich, scalable, robust and secure. Let Crossbar.io take care of the hard parts of messaging so you can focus on your app's features.
+
+| |Version| |Build Status| |Coverage| |Docker| |Snap Status|
+
+Resources
+---------
+
+-  Read more on the `Project Homepage <http://crossbar.io>`__
+-  Jump into the `Getting Started <http://crossbar.io/docs/Getting-Started/>`__
+-  Checkout the complete `Documentation <http://crossbar.io/docs/>`__
+-  Join the `Mailing List <https://groups.google.com/forum/#!forum/crossbario>`__
+-  Follow us on `Twitter <https://twitter.com/crossbario>`__
+-  Ask a question on `StackOverflow <http://stackoverflow.com/questions/ask?tags=crossbar,wamp>`__
+-  Read our `Legal Notes <https://github.com/crossbario/crossbar/blob/master/legal/README.md>`__
+
+Docker images
+-------------
+
+* `amd64 <https://hub.docker.com/r/crossbario/crossbar>`_
+* `armv7 <https://hub.docker.com/r/crossbario/crossbar-armhf>`_
+* `armv8 <https://hub.docker.com/r/crossbario/crossbar-aarch64>`_
+
+JSON Schema for Crossbar.io Configuration File Format
+-----------------------------------------------------
+
+We now have a JSON Schema file available for **config.json**, if you're using VSCode you can make
+use of this by adding the following to your VSCode settings; (File -> Preferences -> Settings)
+
+.. code-block:: json
+
+    "json.schemas": [
+        {
+            "fileMatch": [
+                "/config.json",
+                "/.config.json"
+            ],
+            "url": "https://raw.githubusercontent.com/crossbario/crossbar/master/crossbar.json"
+        }
+    ],
+
+Alternatively, the generic approach is to insert a "$schema" line at the top of your file;
+
+.. code-block:: json
+
+    {
+        "$schema": "https://raw.githubusercontent.com/crossbario/crossbar/master/crossbar.json",
+        "version": 2,
+
+This file is currently experimental, but it should give you contextual auto-completion on
+all Crossbar **config.json** syntax, use CTRL+Space in VSCode to activate IntelliSense.
+
+
+.. |Version| image:: https://img.shields.io/pypi/v/crossbar.svg
+   :target: https://pypi.python.org/pypi/crossbar
+
+.. |Build Status| image:: https://travis-ci.org/crossbario/crossbar.svg?branch=master
+   :target: https://travis-ci.org/crossbario/crossbar
+
+.. |Coverage| image:: https://img.shields.io/codecov/c/github/crossbario/crossbar/master.svg
+   :target: https://codecov.io/github/crossbario/crossbar
+
+.. |Docs| image:: https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat
+   :target: http://crossbar.io/docs/
+
+.. |Docker| image:: https://img.shields.io/badge/docker-ready-blue.svg?style=flat
+   :target: https://hub.docker.com/r/crossbario/crossbar
+
+.. |Snap Status| image:: https://build.snapcraft.io/badge/crossbario/crossbar.svg
+   :target: https://build.snapcraft.io/user/crossbario/crossbar
+
+.. |Bounty 45173769| image:: https://api.bountysource.com/badge/issue?issue_id=45173769
+   :target: https://www.bountysource.com/issues/45173769-register-option-to-kick-existing-registration
+
+.. |Bounty 44253224| image:: https://api.bountysource.com/badge/issue?issue_id=44253224
+   :target: https://www.bountysource.com/issues/44253224-kerberos-authentication
+
+

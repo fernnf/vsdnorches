@@ -1,0 +1,6 @@
+[console_scripts]
+wampy = wampy.cli.main:main
+
+[pytest11]
+pytest_wampy = wampy.testing.pytest_plugin
+

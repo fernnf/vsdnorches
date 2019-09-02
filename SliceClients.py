@@ -84,7 +84,7 @@ class SliceManagerClient(object):
     def set_slice_host(self, slice_id, virtdev_id, vlan_id, phy_portnum):
         app = 'sliceservice.set_slice_host'
         with Client(url=self.url, realm=self.realm) as client:
-            ret = client.call(app,slice_id=slice_id, virtdev_id=virtdev_id, vlan_id=vlan_id, phy_portnum=phy_portnum)
+            ret = client.call(app, slice_id=slice_id, virtdev_id=virtdev_id, vlan_id=vlan_id, phy_portnum=phy_portnum)
             check_error(ret)
 
     def del_slice_host(self, slice_id, virtdev_id, virt_portnum):
