@@ -2,6 +2,7 @@
   <dictionary name="root">
     <words>
       <w>datapath</w>
+      <w>sliceservice</w>
     </words>
   </dictionary>
 </component>
