@@ -14,7 +14,7 @@ chardet==3.0.4
 Click==7.0
 constantly==15.1.0
 crossbar==19.7.1
-cryptography==2.7wh
+cryptography==2.7
 decorator==4.4.0
 dnspython==1.16.0
 eventlet==0.25.1
