@@ -61,7 +61,7 @@ simplejson==3.16.0
 six==1.12.0
 sortedcontainers==2.1.0
 treq==18.6.0
-Twisted==19.7.0
+Twisted==22.4.0
 txaio==18.8.1
 txtorcon==19.0.0
 u-msgpack-python==2.5.2
