@@ -65,7 +65,7 @@ Twisted==19.7.0
 txaio==18.8.1
 txtorcon==19.0.0
 u-msgpack-python==2.5.2
-ujson==1.35
+ujson==5.4.0
 urllib3==1.24.3
 wampy==0.9.21
 watchdog==0.9.0
