@@ -31,7 +31,7 @@ Jinja2==2.10.1
 lmdb==0.97
 lz4==2.1.10
 MarkupSafe==1.1.1
-mistune==0.8.4
+mistune==2.0.3
 monotonic==1.5
 msgpack==0.6.1
 netaddr==0.7.19
